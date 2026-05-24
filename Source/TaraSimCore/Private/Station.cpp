@@ -17,6 +17,7 @@ FStation::FStation()
 	WildlifeSys = MakeUnique<FWildlifeSystem>(*this, Bus);
 	WildlifeSys->InitDefaults();
 	ProgressionSys = MakeUnique<FProgressionSystem>(*this, Bus);
+	SensorSys = MakeUnique<FSensorSystem>(*this, Bus);
 	ConditionSys = MakeUnique<FConditionSystem>(Bus, *this);
 }
 
@@ -93,6 +94,12 @@ void FStation::SeedDefaults()
 	// the player into "needs fixing" within a year of in-game time.
 	Fences.Add(FFence({ TEXT("fence-AB"), TEXT("A"), TEXT("B"), 75.0f }));
 	Fences.Add(FFence({ TEXT("fence-BC"), TEXT("B"), TEXT("C"), 75.0f }));
+
+	// M8 seed — the work-machine fleet (7 types, all unowned at start).
+	for (EWorkMachineType T : FWorkMachine::AllTypes())
+	{
+		WorkMachines.Add(FWorkMachine(T));
+	}
 }
 
 void FStation::TickDay()
@@ -127,6 +134,7 @@ void FStation::TickDay()
 	BreedingSys->TickDay();
 	WildlifeSys->TickDay();
 	ProgressionSys->TickDay();
+	SensorSys->TickDay();
 	ConditionSys->TickDay();
 	Player.DaysOnStation += 1;
 
@@ -296,6 +304,8 @@ bool FStation::RepairFence(const FString& FenceId)
 		if (F.Id == FenceId)
 		{
 			F.Integrity = 100.0f;
+			FFenceRepairedPayload P; P.FenceId = FenceId;
+			Bus.FenceRepaired.Emit(P);
 			return true;
 		}
 	}
@@ -310,6 +320,72 @@ void FStation::ResolveBadWeatherDecision(const FString& Choice)
 bool FStation::BuyProperty()
 {
 	return ProgressionSys ? ProgressionSys->BuyProperty() : false;
+}
+
+const FWorkMachine* FStation::WorkMachineByType(EWorkMachineType Type) const
+{
+	for (const FWorkMachine& M : WorkMachines)
+	{
+		if (M.Type == Type) return &M;
+	}
+	return nullptr;
+}
+
+FWorkMachine* FStation::WorkMachineByType(EWorkMachineType Type)
+{
+	for (FWorkMachine& M : WorkMachines)
+	{
+		if (M.Type == Type) return &M;
+	}
+	return nullptr;
+}
+
+bool FStation::BuyWorkMachine(EWorkMachineType Type)
+{
+	FWorkMachine* M = WorkMachineByType(Type);
+	if (!M) return false;
+	if (M->bOwned) return false;
+	const int32 Cost = M->Stats.PurchasePrice;
+	if (Cost <= 0) { M->bOwned = true; return true; }
+	if (Player.Cash < Cost) return false;
+
+	EconomySys->AddCash(-Cost, TEXT("work-machine purchase"));
+	M->bOwned = true;
+
+	FWorkMachinePurchasedPayload P;
+	P.Type = (int32)Type;
+	P.Cost = Cost;
+	Bus.WorkMachinePurchased.Emit(P);
+	return true;
+}
+
+bool FStation::InstallSensor(ESensorKind Kind, const FString& LocationId)
+{
+	if (!SensorSys) return false;
+	const FSensorProfile Profile = GetSensorProfile(Kind);
+	if (Player.Cash < Profile.PurchasePrice) return false;
+	EconomySys->AddCash(-Profile.PurchasePrice, TEXT("sensor purchase"));
+	return SensorSys->InstallSensor(Kind, LocationId);
+}
+
+bool FStation::SwapSensorBattery(const FString& SensorId)
+{
+	return SensorSys ? SensorSys->SwapBattery(SensorId) : false;
+}
+
+bool FStation::GradeRoad(const FString& RoadId)
+{
+	for (FRoad& R : Roads)
+	{
+		if (R.Id == RoadId)
+		{
+			R.GradeQuality = FRoad::ClampGrade(R.GradeQuality + 50.0f);
+			FRoadGradedPayload P; P.RoadId = RoadId;
+			Bus.RoadGraded.Emit(P);
+			return true;
+		}
+	}
+	return false;
 }
 
 void FStation::TickInfrastructure()
@@ -424,9 +500,11 @@ FString FStation::SerializeJson() const
 	const FString BreedingJson = BreedingSys ? BreedingSys->SerializeJson() : TEXT("{}");
 	const FString WildlifeJson = WildlifeSys ? WildlifeSys->SerializeJson() : TEXT("{}");
 	const FString ProgressionJson = ProgressionSys ? ProgressionSys->SerializeJson() : TEXT("{}");
+	const FString SensorJson = SensorSys ? SensorSys->SerializeJson() : TEXT("{}");
+	const FString WorkMachinesJson = SerializeArray(WorkMachines);
 
 	return FString::Printf(
-		TEXT("{\"schemaVersion\":\"%s\",\"clock\":%s,\"paddocks\":%s,\"herd\":%s,\"adjacency\":%s,\"bores\":%s,\"player\":%s,\"prices\":%s,\"economy\":%s,\"hands\":%s,\"vehicles\":%s,\"fences\":%s,\"roads\":%s,\"events\":%s,\"breeding\":%s,\"wildlife\":%s,\"progression\":%s}"),
+		TEXT("{\"schemaVersion\":\"%s\",\"clock\":%s,\"paddocks\":%s,\"herd\":%s,\"adjacency\":%s,\"bores\":%s,\"player\":%s,\"prices\":%s,\"economy\":%s,\"hands\":%s,\"vehicles\":%s,\"fences\":%s,\"roads\":%s,\"events\":%s,\"breeding\":%s,\"wildlife\":%s,\"progression\":%s,\"workMachines\":%s,\"sensors\":%s}"),
 		TARA_SIM_SAVE_SCHEMA_VERSION,
 		*Clock.SerializeJson(),
 		*PaddocksJson,
@@ -443,7 +521,9 @@ FString FStation::SerializeJson() const
 		*EventsJson,
 		*BreedingJson,
 		*WildlifeJson,
-		*ProgressionJson);
+		*ProgressionJson,
+		*WorkMachinesJson,
+		*SensorJson);
 }
 
 namespace
@@ -697,6 +777,17 @@ TUniquePtr<FStation> FStation::FromJson(const FString& Json)
 	{
 		const FString ProgressionJson = ExtractObject(Json, TEXT("\"progression\":"));
 		if (!ProgressionJson.IsEmpty() && Station->ProgressionSys) Station->ProgressionSys->LoadFromJson(ProgressionJson);
+	}
+
+	// M8 — work machines array + sensors sub-object.
+	Station->WorkMachines.Empty();
+	ParseObjectArray(TEXT("\"workMachines\":["), [&](const FString& Obj)
+	{
+		Station->WorkMachines.Add(FWorkMachine::FromJson(Obj));
+	});
+	{
+		const FString SensorJson = ExtractObject(Json, TEXT("\"sensors\":"));
+		if (!SensorJson.IsEmpty() && Station->SensorSys) Station->SensorSys->LoadFromJson(SensorJson);
 	}
 
 	// Reset water access cache for the restored topology.

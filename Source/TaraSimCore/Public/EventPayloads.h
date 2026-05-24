@@ -263,5 +263,35 @@ struct FBankruptcyDeclaredPayload
 	int32 DaysInDebt = 0;
 };
 
+// ---- M8 — machinery + sensors ----
+
+struct FWorkMachinePurchasedPayload
+{
+	int32 Type = 0;   // EWorkMachineType as int
+	int32 Cost = 0;
+};
+
+struct FSensorInstalledPayload
+{
+	FString SensorId;
+	int32 Kind = 0;   // ESensorKind as int
+	FString LocationId;
+};
+
+struct FSensorBatterySwappedPayload
+{
+	FString SensorId;
+};
+
+struct FFenceRepairedPayload
+{
+	FString FenceId;
+};
+
+struct FRoadGradedPayload
+{
+	FString RoadId;
+};
+
 // Later milestones extend this file. Keep it the only place payload shapes are
 // declared — that way the EventBus.h template just refers to types from here.

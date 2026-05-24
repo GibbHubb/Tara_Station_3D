@@ -11,8 +11,11 @@
 #include "Systems/BreedingSystem.h"
 #include "Systems/WildlifeSystem.h"
 #include "Systems/ProgressionSystem.h"
+#include "Systems/SensorSystem.h"
 #include "Entities/PestPresence.h"
 #include "Entities/InvasivePresence.h"
+#include "Entities/WorkMachine.h"
+#include "Entities/Sensor.h"
 
 void UTaraSimSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -169,6 +172,33 @@ float UTaraSimSubsystem::EvaluateYearNow()
 	if (!Station) return 0.0f;
 	const int32 BirdLogCount = Station->GetWildlifeSystem().GetLoggedSpeciesCount();
 	return Station->GetProgressionSystem().EvaluateYear(BirdLogCount).Score;
+}
+
+bool UTaraSimSubsystem::BuyWorkMachine(int32 WorkMachineType)
+{
+	if (!Station) return false;
+	if (WorkMachineType < 0 || WorkMachineType > 6) return false;
+	return Station->BuyWorkMachine((EWorkMachineType)WorkMachineType);
+}
+
+bool UTaraSimSubsystem::InstallSensor(const FString& Kind, const FString& LocationId)
+{
+	if (!Station) return false;
+	ESensorKind K;
+	if (!TryParseSensorKind(Kind, K)) return false;
+	return Station->InstallSensor(K, LocationId);
+}
+
+bool UTaraSimSubsystem::SwapSensorBattery(const FString& SensorId)
+{
+	if (!Station) return false;
+	return Station->SwapSensorBattery(SensorId);
+}
+
+bool UTaraSimSubsystem::GradeRoad(const FString& RoadId)
+{
+	if (!Station) return false;
+	return Station->GradeRoad(RoadId);
 }
 
 int32 UTaraSimSubsystem::GetYear() const
@@ -361,6 +391,33 @@ int32 UTaraSimSubsystem::GetDaysInBankruptcy() const
 bool UTaraSimSubsystem::IsBankrupted() const
 {
 	return Station ? Station->GetProgressionSystem().IsBankrupted() : false;
+}
+
+bool UTaraSimSubsystem::IsWorkMachineOwned(int32 WorkMachineType) const
+{
+	if (!Station) return false;
+	if (WorkMachineType < 0 || WorkMachineType > 6) return false;
+	const FWorkMachine* M = Station->WorkMachineByType((EWorkMachineType)WorkMachineType);
+	return M ? M->bOwned : false;
+}
+
+int32 UTaraSimSubsystem::GetSensorCount() const
+{
+	return Station ? Station->GetSensorSystem().GetSensors().Num() : 0;
+}
+
+FString UTaraSimSubsystem::GetSensorReading(const FString& SensorId) const
+{
+	if (!Station) return TEXT("—");
+	const FSensor* S = Station->GetSensorSystem().SensorById(SensorId);
+	return S ? S->LastReading : TEXT("—");
+}
+
+int32 UTaraSimSubsystem::GetSensorBatteryDays(const FString& SensorId) const
+{
+	if (!Station) return 0;
+	const FSensor* S = Station->GetSensorSystem().SensorById(SensorId);
+	return S ? S->BatteryDays : 0;
 }
 
 void UTaraSimSubsystem::WireSimEventsToDelegates()
@@ -621,6 +678,39 @@ void UTaraSimSubsystem::WireSimEventsToDelegates()
 		UE_LOG(LogTemp, Warning, TEXT("[TaraSim] BankruptcyDeclared: year %d after %d days in debt"),
 			P.Year, P.DaysInDebt);
 	});
+
+	// M8 — machinery + sensors + infrastructure repair.
+	SubIdWorkMachinePurchased = Bus.WorkMachinePurchased.Subscribe([this](const FWorkMachinePurchasedPayload& P)
+	{
+		OnWorkMachinePurchased.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] WorkMachinePurchased: type=%d cost=$%d"),
+			P.Type, P.Cost);
+	});
+
+	SubIdSensorInstalled = Bus.SensorInstalled.Subscribe([this](const FSensorInstalledPayload& P)
+	{
+		OnSensorInstalled.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] SensorInstalled: %s (kind=%d) @ %s"),
+			*P.SensorId, P.Kind, *P.LocationId);
+	});
+
+	SubIdSensorBatterySwapped = Bus.SensorBatterySwapped.Subscribe([this](const FSensorBatterySwappedPayload& P)
+	{
+		OnSensorBatterySwapped.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] SensorBatterySwapped: %s"), *P.SensorId);
+	});
+
+	SubIdFenceRepaired = Bus.FenceRepaired.Subscribe([this](const FFenceRepairedPayload& P)
+	{
+		OnFenceRepaired.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] FenceRepaired: %s"), *P.FenceId);
+	});
+
+	SubIdRoadGraded = Bus.RoadGraded.Subscribe([this](const FRoadGradedPayload& P)
+	{
+		OnRoadGraded.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] RoadGraded: %s"), *P.RoadId);
+	});
 }
 
 void UTaraSimSubsystem::UnwireSimEvents()
@@ -664,6 +754,11 @@ void UTaraSimSubsystem::UnwireSimEvents()
 	if (SubIdYearEvaluated != -1)   { Bus.YearEvaluated.Unsubscribe(SubIdYearEvaluated); SubIdYearEvaluated = -1; }
 	if (SubIdPropertyPurchased != -1){ Bus.PropertyPurchased.Unsubscribe(SubIdPropertyPurchased); SubIdPropertyPurchased = -1; }
 	if (SubIdBankruptcyDeclared != -1){ Bus.BankruptcyDeclared.Unsubscribe(SubIdBankruptcyDeclared); SubIdBankruptcyDeclared = -1; }
+	if (SubIdWorkMachinePurchased != -1){ Bus.WorkMachinePurchased.Unsubscribe(SubIdWorkMachinePurchased); SubIdWorkMachinePurchased = -1; }
+	if (SubIdSensorInstalled != -1) { Bus.SensorInstalled.Unsubscribe(SubIdSensorInstalled); SubIdSensorInstalled = -1; }
+	if (SubIdSensorBatterySwapped != -1){ Bus.SensorBatterySwapped.Unsubscribe(SubIdSensorBatterySwapped); SubIdSensorBatterySwapped = -1; }
+	if (SubIdFenceRepaired != -1)   { Bus.FenceRepaired.Unsubscribe(SubIdFenceRepaired); SubIdFenceRepaired = -1; }
+	if (SubIdRoadGraded != -1)      { Bus.RoadGraded.Unsubscribe(SubIdRoadGraded); SubIdRoadGraded = -1; }
 }
 
 FString UTaraSimSubsystem::GetSaveFilePath() const
@@ -671,7 +766,7 @@ FString UTaraSimSubsystem::GetSaveFilePath() const
 	// Schema-versioned filename mirrors the 2D project's localStorage key pattern.
 	// Bump on every milestone; mismatched older files discard cleanly via
 	// FStation::FromJson returning nullptr on version mismatch.
-	return FPaths::ProjectSavedDir() / TEXT("tara-save-3d-v7-m7.json");
+	return FPaths::ProjectSavedDir() / TEXT("tara-save-3d-v8-m8.json");
 }
 
 bool UTaraSimSubsystem::TryLoadFromDisk()

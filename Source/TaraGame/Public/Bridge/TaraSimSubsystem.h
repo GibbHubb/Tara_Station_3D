@@ -59,6 +59,13 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraYearEvaluated, const FYearEvaluatedPa
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraPropertyPurchased, const FPropertyPurchasedPayload&);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraBankruptcyDeclared, const FBankruptcyDeclaredPayload&);
 
+// M8 — machinery + sensors + infrastructure repair events.
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraWorkMachinePurchased, const FWorkMachinePurchasedPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraSensorInstalled, const FSensorInstalledPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraSensorBatterySwapped, const FSensorBatterySwappedPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraFenceRepaired, const FFenceRepairedPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraRoadGraded, const FRoadGradedPayload&);
+
 /**
  * UTaraSimSubsystem — the bridge between the engine-agnostic FStation (pure C++
  * sim from TaraSimCore) and the UE5 runtime. There is ONE Station per game
@@ -162,6 +169,22 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Tara")
 	float EvaluateYearNow();
 
+	// M8 — capital-development actions (the wet-season build mode per
+	// CORE_LOOP §1). WorkMachineType: 0=Tractor / 1=FrontEndLoader /
+	// 2=Forklift / 3=Digger / 4=Grader / 5=FlatBedTrailer / 6=MolassesTruck.
+	// SensorKind passed as string ("rain-gauge" / "tank-flow" / "bore-pressure").
+	UFUNCTION(BlueprintCallable, Category = "Tara")
+	bool BuyWorkMachine(int32 WorkMachineType);
+
+	UFUNCTION(BlueprintCallable, Category = "Tara")
+	bool InstallSensor(const FString& Kind, const FString& LocationId);
+
+	UFUNCTION(BlueprintCallable, Category = "Tara")
+	bool SwapSensorBattery(const FString& SensorId);
+
+	UFUNCTION(BlueprintCallable, Category = "Tara")
+	bool GradeRoad(const FString& RoadId);
+
 	// Read-only views for Blueprints / Widgets. These mirror common HUD reads
 	// so the UMG layer doesn't need direct access to the C++ Station.
 	UFUNCTION(BlueprintPure, Category = "Tara")
@@ -258,6 +281,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Tara")
 	bool IsBankrupted() const;
 
+	// M8 — work-machine + sensor readouts.
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	bool IsWorkMachineOwned(int32 WorkMachineType) const;
+
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	int32 GetSensorCount() const;
+
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	FString GetSensorReading(const FString& SensorId) const;
+
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	int32 GetSensorBatteryDays(const FString& SensorId) const;
+
 	// Direct C++ access for performance-sensitive reads (e.g. per-frame Actor
 	// updates). Blueprints should prefer the UFUNCTION getters above.
 	FStation* GetStationMutable() { return Station.Get(); }
@@ -301,6 +337,11 @@ public:
 	FOnTaraYearEvaluated OnYearEvaluated;
 	FOnTaraPropertyPurchased OnPropertyPurchased;
 	FOnTaraBankruptcyDeclared OnBankruptcyDeclared;
+	FOnTaraWorkMachinePurchased OnWorkMachinePurchased;
+	FOnTaraSensorInstalled OnSensorInstalled;
+	FOnTaraSensorBatterySwapped OnSensorBatterySwapped;
+	FOnTaraFenceRepaired OnFenceRepaired;
+	FOnTaraRoadGraded OnRoadGraded;
 
 private:
 	TUniquePtr<FStation> Station;
@@ -343,6 +384,11 @@ private:
 	int32 SubIdYearEvaluated = -1;
 	int32 SubIdPropertyPurchased = -1;
 	int32 SubIdBankruptcyDeclared = -1;
+	int32 SubIdWorkMachinePurchased = -1;
+	int32 SubIdSensorInstalled = -1;
+	int32 SubIdSensorBatterySwapped = -1;
+	int32 SubIdFenceRepaired = -1;
+	int32 SubIdRoadGraded = -1;
 
 	void WireSimEventsToDelegates();
 	void UnwireSimEvents();

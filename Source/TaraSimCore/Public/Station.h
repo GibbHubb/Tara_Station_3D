@@ -20,10 +20,12 @@
 #include "Systems/BreedingSystem.h"
 #include "Systems/WildlifeSystem.h"
 #include "Systems/ProgressionSystem.h"
+#include "Systems/SensorSystem.h"
+#include "Entities/WorkMachine.h"
 
 // Save-schema version. Bumps on any breaking sim shape change. Loading a save
 // with a mismatched version is treated as "no save" (start fresh).
-#define TARA_SIM_SAVE_SCHEMA_VERSION TEXT("tara-save-3d-v7-m7")
+#define TARA_SIM_SAVE_SCHEMA_VERSION TEXT("tara-save-3d-v8-m8")
 
 // Adjacency between paddocks — paddock id → list of adjacent paddock ids.
 // Phase 0 carries this as explicit state (mirroring the 2D model). Phase 2
@@ -98,6 +100,14 @@ public:
 	FProgressionSystem& GetProgressionSystem() { return *ProgressionSys; }
 	const FProgressionSystem& GetProgressionSystem() const { return *ProgressionSys; }
 
+	// M8 accessors.
+	TArray<FWorkMachine>& GetWorkMachines() { return WorkMachines; }
+	const TArray<FWorkMachine>& GetWorkMachines() const { return WorkMachines; }
+	FSensorSystem& GetSensorSystem() { return *SensorSys; }
+	const FSensorSystem& GetSensorSystem() const { return *SensorSys; }
+	const FWorkMachine* WorkMachineByType(EWorkMachineType Type) const;
+	FWorkMachine* WorkMachineByType(EWorkMachineType Type);
+
 	const FPaddock* PaddockById(const FString& Id) const;
 	FPaddock* PaddockById(const FString& Id);
 	const FVehicle* VehicleByType(EVehicleType Type) const;
@@ -143,6 +153,21 @@ public:
 	// funds or wrong role.
 	bool BuyProperty();
 
+	// M8 — purchase a work machine (tractor / loader / grader / etc.). Debits
+	// cash + marks owned. Returns false on insufficient funds or already-owned.
+	bool BuyWorkMachine(EWorkMachineType Type);
+
+	// M8 — install a sensor at a paddock (rain-gauge / tank-flow) or bore
+	// (bore-pressure). Charges purchase price + emits SensorInstalled.
+	bool InstallSensor(ESensorKind Kind, const FString& LocationId);
+
+	// M8 — sensor battery swap (free; flat 180-day reset).
+	bool SwapSensorBattery(const FString& SensorId);
+
+	// M8 — grade a road back up (mirrors 2D — +50 grade quality, emits
+	// RoadGraded). RepairFence (existing) emits FenceRepaired in M8.
+	bool GradeRoad(const FString& RoadId);
+
 	// Serialisation — JSON snapshot, schema-versioned. See SaveManager pattern
 	// in the 2D project's src/sim/SaveManager.ts.
 	FString SerializeJson() const;
@@ -165,6 +190,9 @@ private:
 	TArray<FFence> Fences;
 	TArray<FRoad> Roads;
 
+	// M8 state.
+	TArray<FWorkMachine> WorkMachines;
+
 	// Systems — initialised AFTER the data members above (constructor order
 	// matters; systems hold references to Station + Bus). Water + Economy
 	// come BEFORE Condition so Condition can read water access + active
@@ -177,6 +205,7 @@ private:
 	TUniquePtr<FBreedingSystem> BreedingSys;
 	TUniquePtr<FWildlifeSystem> WildlifeSys;
 	TUniquePtr<FProgressionSystem> ProgressionSys;
+	TUniquePtr<FSensorSystem> SensorSys;
 	TUniquePtr<FConditionSystem> ConditionSys;
 
 	// Default-seed helper — fills paddocks + herd + bores + adjacency to the

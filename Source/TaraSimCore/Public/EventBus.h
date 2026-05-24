@@ -119,5 +119,10 @@ public:
 	TEvent<FPropertyPurchasedPayload> PropertyPurchased;
 	TEvent<FBankruptcyDeclaredPayload> BankruptcyDeclared;
 
-	// Future milestones extend this list.
+	// M8 events.
+	TEvent<FWorkMachinePurchasedPayload> WorkMachinePurchased;
+	TEvent<FSensorInstalledPayload> SensorInstalled;
+	TEvent<FSensorBatterySwappedPayload> SensorBatterySwapped;
+	TEvent<FFenceRepairedPayload> FenceRepaired;
+	TEvent<FRoadGradedPayload> RoadGraded;
 };
