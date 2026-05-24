@@ -1,0 +1,12 @@
+---,ActionId,Label,Season,BridgeFunctionName,DisabledTooltip
+take-vehicle,take-vehicle,"Take a vehicle",Any,,
+muster,muster,"Start a muster",Dry,,"Too muddy to muster — wait for the dry."
+yard-work,yard-work,"Yard work / drafting",Dry,,"Stock work waits for firm ground — wait for the dry."
+order-supplement,order-supplement,"Order supplement",Dry,,"Wet grass means no supplement needed yet — wait for the dry."
+sell-cattle,sell-cattle,"Load sale cattle",Dry,,"Road trains can't get through in the wet — wait for the dry."
+check-bore,check-bore,"Bore run",Dry,,"Bores top up from the wet — focus on capital work now."
+repair-fence,repair-fence,"Repair a fence",Wet,,"Fences hold through the dry — save repairs for the wet."
+grade-road,grade-road,"Grade a road",Wet,,"Save grading for the wet — easier on the machine."
+buy-machine,buy-machine,"Buy a work machine",Wet,,"Capital purchases are wet-season work."
+install-sensor,install-sensor,"Install a sensor",Wet,,"Capital work — best in the wet."
+bush-mechanic,bush-mechanic,"Bush-mechanic the fleet",Wet,,"Save fleet maintenance for the wet."

@@ -139,3 +139,10 @@ private:
 // the BlueprintType wrapper here in TaraGame).
 TARAGAME_API EShedActionSeason ToShedActionSeason(ESeason Season);
 TARAGAME_API bool SeasonMatchesAction(ESeason Current, EShedActionSeason Action);
+
+// Default action set — used when ActionsTable is null (no DT_ShedActions
+// asset has been authored yet). Lets PIE work on day one with sensible
+// rows; populating DT_ShedActions in the Editor overrides this. The
+// CSV at Content/UI/DT_ShedActions.csv mirrors this list 1:1 for the
+// initial Editor import.
+TARAGAME_API TArray<FShedActionRow> ShedActionMenu_DefaultRows();

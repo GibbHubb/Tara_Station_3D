@@ -25,6 +25,65 @@ bool SeasonMatchesAction(ESeason Current, EShedActionSeason Action)
 	return ToShedActionSeason(Current) == Action;
 }
 
+TArray<FShedActionRow> ShedActionMenu_DefaultRows()
+{
+	auto MakeRow = [](const TCHAR* Id, const TCHAR* Label, EShedActionSeason Season,
+		const TCHAR* BridgeFn, const TCHAR* DisabledTip) -> FShedActionRow
+	{
+		FShedActionRow R;
+		R.ActionId = FName(Id);
+		R.Label = FText::FromString(Label);
+		R.Season = Season;
+		R.BridgeFunctionName = FName(BridgeFn);
+		R.DisabledTooltip = FText::FromString(DisabledTip);
+		return R;
+	};
+
+	// Default roster per the TS-3D-TWO-SEASON-MODE plan §3 acceptance. Order
+	// here drives display order in the VerticalBox. Tooltip text quotes the
+	// real station-work language Max wants surfaced (CORE_LOOP §3).
+	return {
+		// Always-on daily-anchor exit (per MAP_BRIEF §7 + plan §3).
+		MakeRow(TEXT("take-vehicle"), TEXT("Take a vehicle"),
+			EShedActionSeason::Any, TEXT(""),
+			TEXT("")),
+
+		// --- Dry-season (cattle-work) actions ---
+		MakeRow(TEXT("muster"), TEXT("Start a muster"),
+			EShedActionSeason::Dry, TEXT(""),  // parameterised — handled by BP override
+			TEXT("Too muddy to muster — wait for the dry.")),
+		MakeRow(TEXT("yard-work"), TEXT("Yard work / drafting"),
+			EShedActionSeason::Dry, TEXT(""),
+			TEXT("Stock work waits for firm ground — wait for the dry.")),
+		MakeRow(TEXT("order-supplement"), TEXT("Order supplement"),
+			EShedActionSeason::Dry, TEXT(""),  // BuySupplement(kind) — BP override
+			TEXT("Wet grass means no supplement needed yet — wait for the dry.")),
+		MakeRow(TEXT("sell-cattle"), TEXT("Load sale cattle"),
+			EShedActionSeason::Dry, TEXT(""),  // SellCattle(count) — BP override
+			TEXT("Road trains can't get through in the wet — wait for the dry.")),
+		MakeRow(TEXT("check-bore"), TEXT("Bore run"),
+			EShedActionSeason::Dry, TEXT(""),  // CheckBore(id) — BP override
+			TEXT("Bores top up from the wet — focus on capital work now.")),
+
+		// --- Wet-season (capital-work) actions ---
+		MakeRow(TEXT("repair-fence"), TEXT("Repair a fence"),
+			EShedActionSeason::Wet, TEXT(""),  // RepairFence(id) — BP override
+			TEXT("Fences hold through the dry — save repairs for the wet.")),
+		MakeRow(TEXT("grade-road"), TEXT("Grade a road"),
+			EShedActionSeason::Wet, TEXT(""),  // GradeRoad(id) — BP override
+			TEXT("Save grading for the wet — easier on the machine.")),
+		MakeRow(TEXT("buy-machine"), TEXT("Buy a work machine"),
+			EShedActionSeason::Wet, TEXT(""),  // BuyWorkMachine(type) — BP override
+			TEXT("Capital purchases are wet-season work.")),
+		MakeRow(TEXT("install-sensor"), TEXT("Install a sensor"),
+			EShedActionSeason::Wet, TEXT(""),  // InstallSensor(kind, loc) — BP override
+			TEXT("Capital work — best in the wet.")),
+		MakeRow(TEXT("bush-mechanic"), TEXT("Bush-mechanic the fleet"),
+			EShedActionSeason::Wet, TEXT(""),
+			TEXT("Save fleet maintenance for the wet.")),
+	};
+}
+
 UTaraSimSubsystem* UShedActionMenu::GetSubsystem() const
 {
 	if (UGameInstance* GI = UGameplayStatics::GetGameInstance(GetWorld()))
@@ -73,18 +132,35 @@ void UShedActionMenu::Close()
 
 void UShedActionMenu::BuildButtons()
 {
-	if (!ActionList || !ActionsTable) return;
+	if (!ActionList) return;
 
 	ActionList->ClearChildren();
 	SpawnedButtons.Reset();
 	SpawnedRows.Reset();
 
-	TArray<FShedActionRow*> Rows;
-	ActionsTable->GetAllRows<FShedActionRow>(TEXT("ShedActionMenu::BuildButtons"), Rows);
-	for (FShedActionRow* RowPtr : Rows)
+	// Resolve row source: DT_ShedActions if assigned, else the C++ defaults so
+	// PIE works on day one without the Editor authoring step. Authoring the
+	// DT_ShedActions asset (see PHASE2_SHED_EDITOR_TODO.md) overrides this.
+	TArray<FShedActionRow> Rows;
+	if (ActionsTable)
 	{
-		if (!RowPtr) continue;
-		const FShedActionRow& Row = *RowPtr;
+		TArray<FShedActionRow*> RowPtrs;
+		ActionsTable->GetAllRows<FShedActionRow>(TEXT("ShedActionMenu::BuildButtons"), RowPtrs);
+		for (FShedActionRow* RowPtr : RowPtrs)
+		{
+			if (RowPtr) Rows.Add(*RowPtr);
+		}
+	}
+	if (Rows.Num() == 0)
+	{
+		Rows = ShedActionMenu_DefaultRows();
+		UE_LOG(LogTemp, Display,
+			TEXT("[ShedActionMenu] using %d default rows (ActionsTable not assigned)"),
+			Rows.Num());
+	}
+
+	for (const FShedActionRow& Row : Rows)
+	{
 
 		UButton* Btn = NewObject<UButton>(this);
 		if (!Btn) continue;
@@ -107,6 +183,11 @@ void UShedActionMenu::BuildButtons()
 		SpawnedRows.Add(Row);
 	}
 }
+
+// Note: Rows-by-value loop above means we copy each row into SpawnedRows.
+// That's fine — rows are tiny POD-ish structs; copying simplifies lifetime
+// across the DT/default split.
+
 
 void UShedActionMenu::RefreshActionStates()
 {
