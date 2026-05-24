@@ -113,5 +113,11 @@ public:
 	TEvent<FInvasiveTreatedPayload> InvasiveTreated;
 	TEvent<FInvasiveSpreadPayload> InvasiveSpread;
 
+	// M7 events.
+	TEvent<FRoleChangedPayload> RoleChanged;
+	TEvent<FYearEvaluatedPayload> YearEvaluated;
+	TEvent<FPropertyPurchasedPayload> PropertyPurchased;
+	TEvent<FBankruptcyDeclaredPayload> BankruptcyDeclared;
+
 	// Future milestones extend this list.
 };

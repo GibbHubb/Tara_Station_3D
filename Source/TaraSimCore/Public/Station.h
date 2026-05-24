@@ -19,10 +19,11 @@
 #include "Systems/EventSystem.h"
 #include "Systems/BreedingSystem.h"
 #include "Systems/WildlifeSystem.h"
+#include "Systems/ProgressionSystem.h"
 
 // Save-schema version. Bumps on any breaking sim shape change. Loading a save
 // with a mismatched version is treated as "no save" (start fresh).
-#define TARA_SIM_SAVE_SCHEMA_VERSION TEXT("tara-save-3d-v6-m6")
+#define TARA_SIM_SAVE_SCHEMA_VERSION TEXT("tara-save-3d-v7-m7")
 
 // Adjacency between paddocks — paddock id → list of adjacent paddock ids.
 // Phase 0 carries this as explicit state (mirroring the 2D model). Phase 2
@@ -93,6 +94,10 @@ public:
 	FWildlifeSystem& GetWildlifeSystem() { return *WildlifeSys; }
 	const FWildlifeSystem& GetWildlifeSystem() const { return *WildlifeSys; }
 
+	// M7 accessors.
+	FProgressionSystem& GetProgressionSystem() { return *ProgressionSys; }
+	const FProgressionSystem& GetProgressionSystem() const { return *ProgressionSys; }
+
 	const FPaddock* PaddockById(const FString& Id) const;
 	FPaddock* PaddockById(const FString& Id);
 	const FVehicle* VehicleByType(EVehicleType Type) const;
@@ -134,6 +139,10 @@ public:
 	// Choice: "feed" / "agist" / "sell" / "hold".
 	void ResolveBadWeatherDecision(const FString& Choice);
 
+	// M7 — buy your own property (manager → owner). Returns false on insufficient
+	// funds or wrong role.
+	bool BuyProperty();
+
 	// Serialisation — JSON snapshot, schema-versioned. See SaveManager pattern
 	// in the 2D project's src/sim/SaveManager.ts.
 	FString SerializeJson() const;
@@ -167,6 +176,7 @@ private:
 	TUniquePtr<FEventSystem> EventSys;
 	TUniquePtr<FBreedingSystem> BreedingSys;
 	TUniquePtr<FWildlifeSystem> WildlifeSys;
+	TUniquePtr<FProgressionSystem> ProgressionSys;
 	TUniquePtr<FConditionSystem> ConditionSys;
 
 	// Default-seed helper — fills paddocks + herd + bores + adjacency to the

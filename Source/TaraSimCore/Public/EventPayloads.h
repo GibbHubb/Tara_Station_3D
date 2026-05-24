@@ -235,5 +235,33 @@ struct FInvasiveSpreadPayload
 	int32 Species = 0;
 };
 
+// ---- M7 — progression ----
+
+struct FRoleChangedPayload
+{
+	int32 From = 0;   // EPlayerRole as int
+	int32 To = 0;
+};
+
+struct FYearEvaluatedPayload
+{
+	int32 Year = 0;
+	float Score = 0.0f;
+	int32 NewRole = 0;
+	bool bPromoted = false;
+	bool bFired = false;
+};
+
+struct FPropertyPurchasedPayload
+{
+	int32 Cost = 0;
+};
+
+struct FBankruptcyDeclaredPayload
+{
+	int32 Year = 0;
+	int32 DaysInDebt = 0;
+};
+
 // Later milestones extend this file. Keep it the only place payload shapes are
 // declared — that way the EventBus.h template just refers to types from here.

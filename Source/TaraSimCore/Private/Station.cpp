@@ -16,6 +16,7 @@ FStation::FStation()
 	BreedingSys = MakeUnique<FBreedingSystem>(*this, Bus);
 	WildlifeSys = MakeUnique<FWildlifeSystem>(*this, Bus);
 	WildlifeSys->InitDefaults();
+	ProgressionSys = MakeUnique<FProgressionSystem>(*this, Bus);
 	ConditionSys = MakeUnique<FConditionSystem>(Bus, *this);
 }
 
@@ -125,6 +126,7 @@ void FStation::TickDay()
 	EventSys->TickDay();
 	BreedingSys->TickDay();
 	WildlifeSys->TickDay();
+	ProgressionSys->TickDay();
 	ConditionSys->TickDay();
 	Player.DaysOnStation += 1;
 
@@ -305,6 +307,11 @@ void FStation::ResolveBadWeatherDecision(const FString& Choice)
 	if (EventSys) EventSys->ResolveBadWeatherDecision(Choice);
 }
 
+bool FStation::BuyProperty()
+{
+	return ProgressionSys ? ProgressionSys->BuyProperty() : false;
+}
+
 void FStation::TickInfrastructure()
 {
 	// Daily decay constants — mirror 2D defaults.
@@ -416,9 +423,10 @@ FString FStation::SerializeJson() const
 	const FString EventsJson = EventSys ? EventSys->SerializeJson() : TEXT("{}");
 	const FString BreedingJson = BreedingSys ? BreedingSys->SerializeJson() : TEXT("{}");
 	const FString WildlifeJson = WildlifeSys ? WildlifeSys->SerializeJson() : TEXT("{}");
+	const FString ProgressionJson = ProgressionSys ? ProgressionSys->SerializeJson() : TEXT("{}");
 
 	return FString::Printf(
-		TEXT("{\"schemaVersion\":\"%s\",\"clock\":%s,\"paddocks\":%s,\"herd\":%s,\"adjacency\":%s,\"bores\":%s,\"player\":%s,\"prices\":%s,\"economy\":%s,\"hands\":%s,\"vehicles\":%s,\"fences\":%s,\"roads\":%s,\"events\":%s,\"breeding\":%s,\"wildlife\":%s}"),
+		TEXT("{\"schemaVersion\":\"%s\",\"clock\":%s,\"paddocks\":%s,\"herd\":%s,\"adjacency\":%s,\"bores\":%s,\"player\":%s,\"prices\":%s,\"economy\":%s,\"hands\":%s,\"vehicles\":%s,\"fences\":%s,\"roads\":%s,\"events\":%s,\"breeding\":%s,\"wildlife\":%s,\"progression\":%s}"),
 		TARA_SIM_SAVE_SCHEMA_VERSION,
 		*Clock.SerializeJson(),
 		*PaddocksJson,
@@ -434,7 +442,8 @@ FString FStation::SerializeJson() const
 		*RoadsJson,
 		*EventsJson,
 		*BreedingJson,
-		*WildlifeJson);
+		*WildlifeJson,
+		*ProgressionJson);
 }
 
 namespace
@@ -683,6 +692,11 @@ TUniquePtr<FStation> FStation::FromJson(const FString& Json)
 	{
 		const FString WildlifeJson = ExtractObject(Json, TEXT("\"wildlife\":"));
 		if (!WildlifeJson.IsEmpty() && Station->WildlifeSys) Station->WildlifeSys->LoadFromJson(WildlifeJson);
+	}
+	// M7 — progression sub-object.
+	{
+		const FString ProgressionJson = ExtractObject(Json, TEXT("\"progression\":"));
+		if (!ProgressionJson.IsEmpty() && Station->ProgressionSys) Station->ProgressionSys->LoadFromJson(ProgressionJson);
 	}
 
 	// Reset water access cache for the restored topology.

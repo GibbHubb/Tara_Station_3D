@@ -53,6 +53,12 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraPestShot, const FPestShotPayload&);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraInvasiveTreated, const FInvasiveTreatedPayload&);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraInvasiveSpread, const FInvasiveSpreadPayload&);
 
+// M7 — progression surfaced for year-end widget + role-change UI.
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraRoleChanged, const FRoleChangedPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraYearEvaluated, const FYearEvaluatedPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraPropertyPurchased, const FPropertyPurchasedPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraBankruptcyDeclared, const FBankruptcyDeclaredPayload&);
+
 /**
  * UTaraSimSubsystem — the bridge between the engine-agnostic FStation (pure C++
  * sim from TaraSimCore) and the UE5 runtime. There is ONE Station per game
@@ -146,6 +152,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Tara")
 	bool TreatInvasive(const FString& PaddockId, const FString& Species);
 
+	// M7 — purchase your own property (Manager → Owner). Returns false on
+	// insufficient funds or wrong role.
+	UFUNCTION(BlueprintCallable, Category = "Tara")
+	bool BuyProperty();
+
+	// Trigger a year-end evaluation now (year-end UI normally calls this on
+	// the YearEnded event consumption). Returns score 0..100.
+	UFUNCTION(BlueprintCallable, Category = "Tara")
+	float EvaluateYearNow();
+
 	// Read-only views for Blueprints / Widgets. These mirror common HUD reads
 	// so the UMG layer doesn't need direct access to the C++ Station.
 	UFUNCTION(BlueprintPure, Category = "Tara")
@@ -232,6 +248,16 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Tara")
 	float GetInvasiveCoverage(const FString& PaddockId, const FString& Species) const;
 
+	// M7 — progression readouts.
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	bool CanBuyProperty() const;
+
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	int32 GetDaysInBankruptcy() const;
+
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	bool IsBankrupted() const;
+
 	// Direct C++ access for performance-sensitive reads (e.g. per-frame Actor
 	// updates). Blueprints should prefer the UFUNCTION getters above.
 	FStation* GetStationMutable() { return Station.Get(); }
@@ -271,6 +297,10 @@ public:
 	FOnTaraPestShot OnPestShot;
 	FOnTaraInvasiveTreated OnInvasiveTreated;
 	FOnTaraInvasiveSpread OnInvasiveSpread;
+	FOnTaraRoleChanged OnRoleChanged;
+	FOnTaraYearEvaluated OnYearEvaluated;
+	FOnTaraPropertyPurchased OnPropertyPurchased;
+	FOnTaraBankruptcyDeclared OnBankruptcyDeclared;
 
 private:
 	TUniquePtr<FStation> Station;
@@ -309,6 +339,10 @@ private:
 	int32 SubIdPestShot = -1;
 	int32 SubIdInvasiveTreated = -1;
 	int32 SubIdInvasiveSpread = -1;
+	int32 SubIdRoleChanged = -1;
+	int32 SubIdYearEvaluated = -1;
+	int32 SubIdPropertyPurchased = -1;
+	int32 SubIdBankruptcyDeclared = -1;
 
 	void WireSimEventsToDelegates();
 	void UnwireSimEvents();

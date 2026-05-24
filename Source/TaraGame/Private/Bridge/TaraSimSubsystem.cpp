@@ -10,6 +10,7 @@
 #include "Systems/EventSystem.h"
 #include "Systems/BreedingSystem.h"
 #include "Systems/WildlifeSystem.h"
+#include "Systems/ProgressionSystem.h"
 #include "Entities/PestPresence.h"
 #include "Entities/InvasivePresence.h"
 
@@ -155,6 +156,19 @@ bool UTaraSimSubsystem::TreatInvasive(const FString& PaddockId, const FString& S
 	EInvasiveSpecies S;
 	if (!TryParseInvasiveSpecies(Species, S)) return false;
 	return Station->GetWildlifeSystem().TreatInvasive(PaddockId, S);
+}
+
+bool UTaraSimSubsystem::BuyProperty()
+{
+	if (!Station) return false;
+	return Station->BuyProperty();
+}
+
+float UTaraSimSubsystem::EvaluateYearNow()
+{
+	if (!Station) return 0.0f;
+	const int32 BirdLogCount = Station->GetWildlifeSystem().GetLoggedSpeciesCount();
+	return Station->GetProgressionSystem().EvaluateYear(BirdLogCount).Score;
 }
 
 int32 UTaraSimSubsystem::GetYear() const
@@ -332,6 +346,21 @@ float UTaraSimSubsystem::GetInvasiveCoverage(const FString& PaddockId, const FSt
 		if (E.PaddockId == PaddockId && E.Species == S) return E.Coverage;
 	}
 	return 0.0f;
+}
+
+bool UTaraSimSubsystem::CanBuyProperty() const
+{
+	return Station ? Station->GetProgressionSystem().CanBuyProperty() : false;
+}
+
+int32 UTaraSimSubsystem::GetDaysInBankruptcy() const
+{
+	return Station ? Station->GetProgressionSystem().GetDaysInBankruptcy() : 0;
+}
+
+bool UTaraSimSubsystem::IsBankrupted() const
+{
+	return Station ? Station->GetProgressionSystem().IsBankrupted() : false;
 }
 
 void UTaraSimSubsystem::WireSimEventsToDelegates()
@@ -563,6 +592,35 @@ void UTaraSimSubsystem::WireSimEventsToDelegates()
 			*P.FromPaddockId, *P.ToPaddockId,
 			*InvasiveSpeciesToString((EInvasiveSpecies)P.Species));
 	});
+
+	// M7 — progression.
+	SubIdRoleChanged = Bus.RoleChanged.Subscribe([this](const FRoleChangedPayload& P)
+	{
+		OnRoleChanged.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] RoleChanged: %d -> %d"), P.From, P.To);
+	});
+
+	SubIdYearEvaluated = Bus.YearEvaluated.Subscribe([this](const FYearEvaluatedPayload& P)
+	{
+		OnYearEvaluated.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] YearEvaluated: year %d score %.1f newRole=%d promoted=%s fired=%s"),
+			P.Year, P.Score, P.NewRole,
+			P.bPromoted ? TEXT("yes") : TEXT("no"),
+			P.bFired ? TEXT("yes") : TEXT("no"));
+	});
+
+	SubIdPropertyPurchased = Bus.PropertyPurchased.Subscribe([this](const FPropertyPurchasedPayload& P)
+	{
+		OnPropertyPurchased.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] PropertyPurchased: $%d"), P.Cost);
+	});
+
+	SubIdBankruptcyDeclared = Bus.BankruptcyDeclared.Subscribe([this](const FBankruptcyDeclaredPayload& P)
+	{
+		OnBankruptcyDeclared.Broadcast(P);
+		UE_LOG(LogTemp, Warning, TEXT("[TaraSim] BankruptcyDeclared: year %d after %d days in debt"),
+			P.Year, P.DaysInDebt);
+	});
 }
 
 void UTaraSimSubsystem::UnwireSimEvents()
@@ -602,6 +660,10 @@ void UTaraSimSubsystem::UnwireSimEvents()
 	if (SubIdPestShot != -1)        { Bus.PestShot.Unsubscribe(SubIdPestShot); SubIdPestShot = -1; }
 	if (SubIdInvasiveTreated != -1) { Bus.InvasiveTreated.Unsubscribe(SubIdInvasiveTreated); SubIdInvasiveTreated = -1; }
 	if (SubIdInvasiveSpread != -1)  { Bus.InvasiveSpread.Unsubscribe(SubIdInvasiveSpread); SubIdInvasiveSpread = -1; }
+	if (SubIdRoleChanged != -1)     { Bus.RoleChanged.Unsubscribe(SubIdRoleChanged); SubIdRoleChanged = -1; }
+	if (SubIdYearEvaluated != -1)   { Bus.YearEvaluated.Unsubscribe(SubIdYearEvaluated); SubIdYearEvaluated = -1; }
+	if (SubIdPropertyPurchased != -1){ Bus.PropertyPurchased.Unsubscribe(SubIdPropertyPurchased); SubIdPropertyPurchased = -1; }
+	if (SubIdBankruptcyDeclared != -1){ Bus.BankruptcyDeclared.Unsubscribe(SubIdBankruptcyDeclared); SubIdBankruptcyDeclared = -1; }
 }
 
 FString UTaraSimSubsystem::GetSaveFilePath() const
@@ -609,7 +671,7 @@ FString UTaraSimSubsystem::GetSaveFilePath() const
 	// Schema-versioned filename mirrors the 2D project's localStorage key pattern.
 	// Bump on every milestone; mismatched older files discard cleanly via
 	// FStation::FromJson returning nullptr on version mismatch.
-	return FPaths::ProjectSavedDir() / TEXT("tara-save-3d-v6-m6.json");
+	return FPaths::ProjectSavedDir() / TEXT("tara-save-3d-v7-m7.json");
 }
 
 bool UTaraSimSubsystem::TryLoadFromDisk()
