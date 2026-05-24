@@ -5,6 +5,7 @@
 #include "Entities/Herd.h"
 #include "Entities/CattleCohort.h"
 #include "Systems/WaterSystem.h"
+#include "Systems/EconomySystem.h"
 
 FConditionSystem::FConditionSystem(FEventBus& InBus, FStation& InStation)
 	: Bus(InBus), Station(InStation)
@@ -18,15 +19,19 @@ void FConditionSystem::TickDay()
 	const FPaddock* Paddock = Station.PaddockById(Herd.CurrentPaddockId);
 	if (!Paddock) return;
 
-	const float Grass = Paddock->GrassKgPerHa;
+	// M3 — supplemental feeding lifts the *effective* grass before threshold checks.
+	const float Lift = Station.GetEconomySystem().ActiveGrassFloorLift();
+	const float RecoveryBoost = Station.GetEconomySystem().ActiveRecoveryBoost();
+	const float Grass = Paddock->GrassKgPerHa + Lift;
+
 	float Delta;
-	if (Grass >= GrassThreshold)        Delta = RecoveryPerDay;
-	else if (Grass >= GrassFloor)       Delta = 0.0f;
-	else if (Grass >= GrassCritical)    Delta = -DeclinePerDay;
-	else                                Delta = -StarvationPerDay;
+	if (Grass >= GrassThreshold)        Delta = RecoveryPerDay + RecoveryBoost;
+	else if (Grass >= GrassFloor)       Delta = RecoveryBoost;
+	else if (Grass >= GrassCritical)    Delta = -DeclinePerDay + RecoveryBoost;
+	else                                Delta = -StarvationPerDay + RecoveryBoost;
 
 	// M2 — water access on top of grass (locked from TS8: supplements do NOT
-	// bypass dehydration when M3 lands).
+	// bypass dehydration — water-decay applied AFTER lifts).
 	const EWaterAccess Water = Station.GetWaterAccess(Paddock->Id);
 	if (Water == EWaterAccess::None) Delta -= WaterNoneExtraDecay;
 	else if (Water == EWaterAccess::Low) Delta -= WaterLowExtraDecay;

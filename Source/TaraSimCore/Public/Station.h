@@ -6,12 +6,15 @@
 #include "Entities/Paddock.h"
 #include "Entities/Herd.h"
 #include "Entities/Bore.h"
+#include "Entities/Player.h"
+#include "Entities/PriceTable.h"
 #include "Systems/ConditionSystem.h"
 #include "Systems/WaterSystem.h"
+#include "Systems/EconomySystem.h"
 
 // Save-schema version. Bumps on any breaking sim shape change. Loading a save
 // with a mismatched version is treated as "no save" (start fresh).
-#define TARA_SIM_SAVE_SCHEMA_VERSION TEXT("tara-save-3d-v2-m2")
+#define TARA_SIM_SAVE_SCHEMA_VERSION TEXT("tara-save-3d-v3-m3")
 
 // Adjacency between paddocks — paddock id → list of adjacent paddock ids.
 // Phase 0 carries this as explicit state (mirroring the 2D model). Phase 2
@@ -22,9 +25,9 @@ using FAdjacency = TMap<FString, TArray<FString>>;
 // FStation — the sim orchestrator. Mirrors src/sim/Station.ts.
 //
 // Owns all entities + systems + the event bus. Runs the tickDay sequence:
-// (clock → herd → grass) — for Phase 0 only condition wires up. Later phases
-// add Water → Economy → Mustering → Infrastructure → Event → Breeding →
-// Wildlife → Progression → Sensor.
+// clock → herd-grass → water → economy → condition (current scope through M3).
+// Future milestones extend: + infrastructure + event + breeding + wildlife
+// + progression + sensor.
 //
 // The 3D layer's UTaraSimSubsystem (in TaraGame) owns one FStation via
 // TUniquePtr. Actors / Pawns / Widgets reach the station through the
@@ -34,8 +37,8 @@ class TARASIMCORE_API FStation
 {
 public:
 	// Default construction sets up the M1 starter state: 3 paddocks + 1
-	// 8-head cohort in Home Paddock. Equivalent to BootScene "New Game"
-	// in the 2D project.
+	// 8-head cohort in Home Paddock + ringer player at $250 + default prices.
+	// Equivalent to BootScene "New Game" in the 2D project.
 	FStation();
 
 	// Day-tick — the heart of the sim.
@@ -53,6 +56,13 @@ public:
 	const TArray<FBore>& GetBores() const { return Bores; }
 	const FAdjacency& GetAdjacency() const { return Adjacency; }
 	FWaterSystem& GetWaterSystem() { return *WaterSys; }
+
+	// M3 accessors.
+	FPlayer& GetPlayer() { return Player; }
+	const FPlayer& GetPlayer() const { return Player; }
+	FPriceTable& GetPrices() { return Prices; }
+	const FPriceTable& GetPrices() const { return Prices; }
+	FEconomySystem& GetEconomySystem() { return *EconomySys; }
 
 	const FPaddock* PaddockById(const FString& Id) const;
 	FPaddock* PaddockById(const FString& Id);
@@ -77,11 +87,15 @@ private:
 	FHerd Herd;
 	TArray<FBore> Bores;
 	FAdjacency Adjacency;
+	FPlayer Player;
+	FPriceTable Prices;
 
 	// Systems — initialised AFTER the data members above (constructor order
-	// matters; systems hold references to Station + Bus). Water comes BEFORE
-	// Condition so Condition can query water-access on its tick.
+	// matters; systems hold references to Station + Bus). Water + Economy
+	// come BEFORE Condition so Condition can read water access + active
+	// supplements on its tick.
 	TUniquePtr<FWaterSystem> WaterSys;
+	TUniquePtr<FEconomySystem> EconomySys;
 	TUniquePtr<FConditionSystem> ConditionSys;
 
 	// Default-seed helper — fills paddocks + herd + bores + adjacency to the

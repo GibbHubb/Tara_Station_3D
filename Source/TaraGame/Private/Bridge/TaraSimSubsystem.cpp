@@ -1,6 +1,7 @@
 #include "Bridge/TaraSimSubsystem.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Entities/Supplement.h"
 
 void UTaraSimSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -53,6 +54,20 @@ bool UTaraSimSubsystem::CheckBore(const FString& BoreId)
 	return R.bFixed;
 }
 
+bool UTaraSimSubsystem::BuySupplement(int32 SupplementKind)
+{
+	if (!Station) return false;
+	if (SupplementKind < 0 || SupplementKind > 2) return false;
+	return Station->GetEconomySystem().BuySupplement((ESupplementKind)SupplementKind);
+}
+
+int32 UTaraSimSubsystem::SellCattle(int32 Count)
+{
+	if (!Station) return 0;
+	const auto R = Station->GetEconomySystem().SellCattle(Count, Station->GetClock().GetSeason());
+	return R.bSuccess ? R.Amount : 0;
+}
+
 int32 UTaraSimSubsystem::GetYear() const
 {
 	return Station ? Station->GetClock().Year : 0;
@@ -89,6 +104,22 @@ int32 UTaraSimSubsystem::GetPaddockWaterAccess(const FString& PaddockId) const
 {
 	if (!Station) return 0;
 	return (int32)Station->GetWaterAccess(PaddockId);
+}
+
+int32 UTaraSimSubsystem::GetPlayerCash() const
+{
+	return Station ? Station->GetPlayer().Cash : 0;
+}
+
+int32 UTaraSimSubsystem::GetPlayerRole() const
+{
+	return Station ? (int32)Station->GetPlayer().Role : 0;
+}
+
+int32 UTaraSimSubsystem::GetCurrentCattlePrice() const
+{
+	if (!Station) return 0;
+	return Station->GetPrices().CurrentCattlePrice(Station->GetClock().GetSeason());
 }
 
 void UTaraSimSubsystem::WireSimEventsToDelegates()
@@ -139,6 +170,32 @@ void UTaraSimSubsystem::WireSimEventsToDelegates()
 		OnBoreRepaired.Broadcast(P);
 		UE_LOG(LogTemp, Display, TEXT("[TaraSim] BoreRepaired: %s"), *P.BoreId);
 	});
+
+	// M3 — economy events.
+	SubIdMoneyChanged = Bus.MoneyChanged.Subscribe([this](const FMoneyChangedPayload& P)
+	{
+		OnMoneyChanged.Broadcast(P);
+	});
+
+	SubIdCattleSold = Bus.CattleSold.Subscribe([this](const FCattleSoldPayload& P)
+	{
+		OnCattleSold.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] CattleSold: %d head @ $%d = $%d"),
+			P.Count, P.PricePerHead, P.Total);
+	});
+
+	SubIdSupplementOrdered = Bus.SupplementOrdered.Subscribe([this](const FSupplementOrderedPayload& P)
+	{
+		OnSupplementOrdered.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] SupplementOrdered: %s $%d (arrives %dd)"),
+			*P.Kind, P.Cost, P.ArrivesInDays);
+	});
+
+	SubIdYearEnded = Bus.YearEnded.Subscribe([this](const FYearEndedPayload& P)
+	{
+		OnYearEnded.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] YearEnded: %d"), P.Year);
+	});
 }
 
 void UTaraSimSubsystem::UnwireSimEvents()
@@ -152,6 +209,10 @@ void UTaraSimSubsystem::UnwireSimEvents()
 	if (SubIdWaterRestored != -1) { Bus.WaterAccessRestored.Unsubscribe(SubIdWaterRestored); SubIdWaterRestored = -1; }
 	if (SubIdBoreFailed != -1)    { Bus.BoreFailed.Unsubscribe(SubIdBoreFailed); SubIdBoreFailed = -1; }
 	if (SubIdBoreRepaired != -1)  { Bus.BoreRepaired.Unsubscribe(SubIdBoreRepaired); SubIdBoreRepaired = -1; }
+	if (SubIdMoneyChanged != -1)  { Bus.MoneyChanged.Unsubscribe(SubIdMoneyChanged); SubIdMoneyChanged = -1; }
+	if (SubIdCattleSold != -1)    { Bus.CattleSold.Unsubscribe(SubIdCattleSold); SubIdCattleSold = -1; }
+	if (SubIdSupplementOrdered != -1) { Bus.SupplementOrdered.Unsubscribe(SubIdSupplementOrdered); SubIdSupplementOrdered = -1; }
+	if (SubIdYearEnded != -1)     { Bus.YearEnded.Unsubscribe(SubIdYearEnded); SubIdYearEnded = -1; }
 }
 
 FString UTaraSimSubsystem::GetSaveFilePath() const
@@ -159,7 +220,7 @@ FString UTaraSimSubsystem::GetSaveFilePath() const
 	// Schema-versioned filename mirrors the 2D project's localStorage key pattern.
 	// Bump on every milestone; mismatched older files discard cleanly via
 	// FStation::FromJson returning nullptr on version mismatch.
-	return FPaths::ProjectSavedDir() / TEXT("tara-save-3d-v2-m2.json");
+	return FPaths::ProjectSavedDir() / TEXT("tara-save-3d-v3-m3.json");
 }
 
 bool UTaraSimSubsystem::TryLoadFromDisk()

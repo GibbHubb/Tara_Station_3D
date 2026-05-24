@@ -58,5 +58,33 @@ struct FBoreRepairedPayload
 	FString BoreId;
 };
 
+// ---- M3 — economy ----
+
+struct FMoneyChangedPayload
+{
+	int32 Delta;
+	FString Reason;
+	int32 NewCash;
+};
+
+struct FCattleSoldPayload
+{
+	int32 Count;
+	int32 PricePerHead;
+	int32 Total;
+};
+
+struct FSupplementOrderedPayload
+{
+	FString Kind;
+	int32 Cost;
+	int32 ArrivesInDays;
+};
+
+struct FYearEndedPayload
+{
+	int32 Year;
+};
+
 // Later milestones extend this file. Keep it the only place payload shapes are
 // declared — that way the EventBus.h template just refers to types from here.

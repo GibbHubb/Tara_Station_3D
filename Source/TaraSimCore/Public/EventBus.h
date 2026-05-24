@@ -79,5 +79,11 @@ public:
 	TEvent<FBoreFailedPayload> BoreFailed;
 	TEvent<FBoreRepairedPayload> BoreRepaired;
 
+	// M3 events.
+	TEvent<FMoneyChangedPayload> MoneyChanged;
+	TEvent<FCattleSoldPayload> CattleSold;
+	TEvent<FSupplementOrderedPayload> SupplementOrdered;
+	TEvent<FYearEndedPayload> YearEnded;
+
 	// Future milestones extend this list.
 };

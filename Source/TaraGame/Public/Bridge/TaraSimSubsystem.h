@@ -19,6 +19,12 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraWaterAccessRestored, const FWaterAcce
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraBoreFailed, const FBoreFailedPayload&);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraBoreRepaired, const FBoreRepairedPayload&);
 
+// M3 — economy events surfaced for HUD + year-end widget.
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraMoneyChanged, const FMoneyChangedPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraCattleSold, const FCattleSoldPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraSupplementOrdered, const FSupplementOrderedPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraYearEnded, const FYearEndedPayload&);
+
 /**
  * UTaraSimSubsystem — the bridge between the engine-agnostic FStation (pure C++
  * sim from TaraSimCore) and the UE5 runtime. There is ONE Station per game
@@ -57,6 +63,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Tara")
 	bool CheckBore(const FString& BoreId);
 
+	// M3 — economy actions.
+	// SupplementKind: 0 = Lick, 1 = Molasses, 2 = Feed.
+	UFUNCTION(BlueprintCallable, Category = "Tara")
+	bool BuySupplement(int32 SupplementKind);
+
+	UFUNCTION(BlueprintCallable, Category = "Tara")
+	int32 SellCattle(int32 Count);
+
 	// Read-only views for Blueprints / Widgets. These mirror common HUD reads
 	// so the UMG layer doesn't need direct access to the C++ Station.
 	UFUNCTION(BlueprintPure, Category = "Tara")
@@ -81,6 +95,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Tara")
 	int32 GetPaddockWaterAccess(const FString& PaddockId) const;
 
+	// M3 — economy readouts.
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	int32 GetPlayerCash() const;
+
+	// 0 = Ringer / 1 = Manager / 2 = Owner.
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	int32 GetPlayerRole() const;
+
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	int32 GetCurrentCattlePrice() const;
+
 	// Direct C++ access for performance-sensitive reads (e.g. per-frame Actor
 	// updates). Blueprints should prefer the UFUNCTION getters above.
 	FStation* GetStationMutable() { return Station.Get(); }
@@ -94,6 +119,10 @@ public:
 	FOnTaraWaterAccessRestored OnWaterAccessRestored;
 	FOnTaraBoreFailed OnBoreFailed;
 	FOnTaraBoreRepaired OnBoreRepaired;
+	FOnTaraMoneyChanged OnMoneyChanged;
+	FOnTaraCattleSold OnCattleSold;
+	FOnTaraSupplementOrdered OnSupplementOrdered;
+	FOnTaraYearEnded OnYearEnded;
 
 private:
 	TUniquePtr<FStation> Station;
@@ -106,6 +135,10 @@ private:
 	int32 SubIdWaterRestored = -1;
 	int32 SubIdBoreFailed = -1;
 	int32 SubIdBoreRepaired = -1;
+	int32 SubIdMoneyChanged = -1;
+	int32 SubIdCattleSold = -1;
+	int32 SubIdSupplementOrdered = -1;
+	int32 SubIdYearEnded = -1;
 
 	void WireSimEventsToDelegates();
 	void UnwireSimEvents();

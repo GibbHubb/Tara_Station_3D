@@ -4,11 +4,11 @@ FStation::FStation()
 {
 	SeedDefaults();
 
-	// Systems — construct in dependency order. Water FIRST (Condition reads
-	// water access on its tick); refresh access immediately so the very first
-	// TickDay has a valid map.
+	// Systems — construct in dependency order. Water + Economy FIRST so
+	// Condition can read water access + active supplements on its tick.
 	WaterSys = MakeUnique<FWaterSystem>(Bus, *this);
 	WaterSys->RecomputeAccess();
+	EconomySys = MakeUnique<FEconomySystem>(Bus, *this);
 	ConditionSys = MakeUnique<FConditionSystem>(Bus, *this);
 }
 
@@ -81,9 +81,12 @@ void FStation::TickDay()
 		P.SimulateDay(Clock.GetSeason(), HerdHere, 1.0f);
 	}
 
-	// Order: Water → Condition (Condition reads water-access cached by Water).
+	// Order: Water → Economy → Condition. Condition reads water-access cached
+	// by Water and active grass-floor lift managed by Economy.
 	WaterSys->TickDay();
+	EconomySys->TickDay(Clock.DayOfYear, Clock.Year);
 	ConditionSys->TickDay();
+	Player.DaysOnStation += 1;
 
 	{
 		FDayEndedPayload P;
@@ -161,13 +164,16 @@ FString FStation::SerializeJson() const
 	AdjJson += TEXT("}");
 
 	return FString::Printf(
-		TEXT("{\"schemaVersion\":\"%s\",\"clock\":%s,\"paddocks\":%s,\"herd\":%s,\"adjacency\":%s,\"bores\":%s}"),
+		TEXT("{\"schemaVersion\":\"%s\",\"clock\":%s,\"paddocks\":%s,\"herd\":%s,\"adjacency\":%s,\"bores\":%s,\"player\":%s,\"prices\":%s,\"economy\":%s}"),
 		TARA_SIM_SAVE_SCHEMA_VERSION,
 		*Clock.SerializeJson(),
 		*PaddocksJson,
 		*Herd.SerializeJson(),
 		*AdjJson,
-		*BoresJson);
+		*BoresJson,
+		*Player.SerializeJson(),
+		*Prices.SerializeJson(),
+		*EconomySys->SerializeJson());
 }
 
 namespace
@@ -331,6 +337,20 @@ TUniquePtr<FStation> FStation::FromJson(const FString& Json)
 				P++;
 			}
 		}
+	}
+
+	// Player + Prices + Economy.
+	{
+		const FString PlayerJson = ExtractObject(Json, TEXT("\"player\":"));
+		if (!PlayerJson.IsEmpty()) Station->Player = FPlayer::FromJson(PlayerJson);
+	}
+	{
+		const FString PricesJson = ExtractObject(Json, TEXT("\"prices\":"));
+		if (!PricesJson.IsEmpty()) Station->Prices = FPriceTable::FromJson(PricesJson);
+	}
+	{
+		const FString EconJson = ExtractObject(Json, TEXT("\"economy\":"));
+		if (!EconJson.IsEmpty() && Station->EconomySys) Station->EconomySys->LoadFromJson(EconJson);
 	}
 
 	// Reset water access cache for the restored topology.
