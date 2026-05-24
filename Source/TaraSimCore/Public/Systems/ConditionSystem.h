@@ -23,6 +23,10 @@ public:
 	static constexpr float StarvationPerDay = 2.0f;
 	static constexpr float TransitDrainPerDay = 0.3f;
 
+	// M2 — water access decay layer (applied AFTER grass-driven delta).
+	static constexpr float WaterLowExtraDecay = 0.4f;
+	static constexpr float WaterNoneExtraDecay = 1.5f;
+
 	static constexpr float StarvationCondition = 20.0f;
 	static constexpr int32 StarvationGraceDays = 3;
 	static constexpr float DeathFractionPerDay = 0.05f;

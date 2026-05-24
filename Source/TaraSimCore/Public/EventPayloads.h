@@ -35,5 +35,28 @@ struct FCattleDiedPayload
 	FString Cause;
 };
 
+// ---- M2 — water ----
+
+struct FWaterAccessLostPayload
+{
+	FString PaddockId;
+};
+
+struct FWaterAccessRestoredPayload
+{
+	FString PaddockId;
+};
+
+struct FBoreFailedPayload
+{
+	FString BoreId;
+	TArray<FString> PaddockIds;
+};
+
+struct FBoreRepairedPayload
+{
+	FString BoreId;
+};
+
 // Later milestones extend this file. Keep it the only place payload shapes are
 // declared — that way the EventBus.h template just refers to types from here.

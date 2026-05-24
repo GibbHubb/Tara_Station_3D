@@ -4,6 +4,7 @@
 #include "Entities/Paddock.h"
 #include "Entities/Herd.h"
 #include "Entities/CattleCohort.h"
+#include "Systems/WaterSystem.h"
 
 FConditionSystem::FConditionSystem(FEventBus& InBus, FStation& InStation)
 	: Bus(InBus), Station(InStation)
@@ -24,8 +25,11 @@ void FConditionSystem::TickDay()
 	else if (Grass >= GrassCritical)    Delta = -DeclinePerDay;
 	else                                Delta = -StarvationPerDay;
 
-	// M2 water decay + M3 supplement lifts come in later phases. Phase 0 is
-	// grass-only (M1 parity).
+	// M2 — water access on top of grass (locked from TS8: supplements do NOT
+	// bypass dehydration when M3 lands).
+	const EWaterAccess Water = Station.GetWaterAccess(Paddock->Id);
+	if (Water == EWaterAccess::None) Delta -= WaterNoneExtraDecay;
+	else if (Water == EWaterAccess::Low) Delta -= WaterLowExtraDecay;
 
 	ApplyDelta(Herd, Delta, Paddock->Id, Paddock->Name);
 }

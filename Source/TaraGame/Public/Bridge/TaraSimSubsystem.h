@@ -13,6 +13,12 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraDayEnded, const FDayEndedPayload&);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraCattleDied, const FCattleDiedPayload&);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraHerdConditionChanged, const FHerdConditionChangedPayload&);
 
+// M2 — water events surfaced through the bridge for the HUD + paddock actors.
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraWaterAccessLost, const FWaterAccessLostPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraWaterAccessRestored, const FWaterAccessRestoredPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraBoreFailed, const FBoreFailedPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraBoreRepaired, const FBoreRepairedPayload&);
+
 /**
  * UTaraSimSubsystem — the bridge between the engine-agnostic FStation (pure C++
  * sim from TaraSimCore) and the UE5 runtime. There is ONE Station per game
@@ -47,6 +53,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Tara")
 	void NewGame();
 
+	// M2 — bore action surface.
+	UFUNCTION(BlueprintCallable, Category = "Tara")
+	bool CheckBore(const FString& BoreId);
+
 	// Read-only views for Blueprints / Widgets. These mirror common HUD reads
 	// so the UMG layer doesn't need direct access to the C++ Station.
 	UFUNCTION(BlueprintPure, Category = "Tara")
@@ -67,6 +77,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Tara")
 	float GetPaddockGrassKgPerHa(const FString& PaddockId) const;
 
+	// M2 — water access readout as int (0=Full / 1=Low / 2=None) for Blueprint.
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	int32 GetPaddockWaterAccess(const FString& PaddockId) const;
+
 	// Direct C++ access for performance-sensitive reads (e.g. per-frame Actor
 	// updates). Blueprints should prefer the UFUNCTION getters above.
 	FStation* GetStationMutable() { return Station.Get(); }
@@ -76,6 +90,10 @@ public:
 	FOnTaraDayEnded OnDayEnded;
 	FOnTaraCattleDied OnCattleDied;
 	FOnTaraHerdConditionChanged OnHerdConditionChanged;
+	FOnTaraWaterAccessLost OnWaterAccessLost;
+	FOnTaraWaterAccessRestored OnWaterAccessRestored;
+	FOnTaraBoreFailed OnBoreFailed;
+	FOnTaraBoreRepaired OnBoreRepaired;
 
 private:
 	TUniquePtr<FStation> Station;
@@ -84,6 +102,10 @@ private:
 	int32 SubIdDayEnded = -1;
 	int32 SubIdCattleDied = -1;
 	int32 SubIdHerdCondition = -1;
+	int32 SubIdWaterLost = -1;
+	int32 SubIdWaterRestored = -1;
+	int32 SubIdBoreFailed = -1;
+	int32 SubIdBoreRepaired = -1;
 
 	void WireSimEventsToDelegates();
 	void UnwireSimEvents();

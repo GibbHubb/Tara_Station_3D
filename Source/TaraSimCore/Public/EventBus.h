@@ -73,5 +73,11 @@ public:
 	TEvent<FHerdConditionChangedPayload> HerdConditionChanged;
 	TEvent<FCattleDiedPayload> CattleDied;
 
+	// M2 events.
+	TEvent<FWaterAccessLostPayload> WaterAccessLost;
+	TEvent<FWaterAccessRestoredPayload> WaterAccessRestored;
+	TEvent<FBoreFailedPayload> BoreFailed;
+	TEvent<FBoreRepairedPayload> BoreRepaired;
+
 	// Future milestones extend this list.
 };

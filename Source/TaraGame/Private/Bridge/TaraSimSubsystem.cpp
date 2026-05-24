@@ -46,6 +46,13 @@ void UTaraSimSubsystem::NewGame()
 	WireSimEventsToDelegates();
 }
 
+bool UTaraSimSubsystem::CheckBore(const FString& BoreId)
+{
+	if (!Station) return false;
+	const auto R = Station->CheckBore(BoreId);
+	return R.bFixed;
+}
+
 int32 UTaraSimSubsystem::GetYear() const
 {
 	return Station ? Station->GetClock().Year : 0;
@@ -78,6 +85,12 @@ float UTaraSimSubsystem::GetPaddockGrassKgPerHa(const FString& PaddockId) const
 	return P ? P->GrassKgPerHa : 0.0f;
 }
 
+int32 UTaraSimSubsystem::GetPaddockWaterAccess(const FString& PaddockId) const
+{
+	if (!Station) return 0;
+	return (int32)Station->GetWaterAccess(PaddockId);
+}
+
 void UTaraSimSubsystem::WireSimEventsToDelegates()
 {
 	if (!Station) return;
@@ -100,6 +113,32 @@ void UTaraSimSubsystem::WireSimEventsToDelegates()
 	{
 		OnHerdConditionChanged.Broadcast(P);
 	});
+
+	// M2 — water events.
+	SubIdWaterLost = Bus.WaterAccessLost.Subscribe([this](const FWaterAccessLostPayload& P)
+	{
+		OnWaterAccessLost.Broadcast(P);
+		UE_LOG(LogTemp, Warning, TEXT("[TaraSim] WaterAccessLost: paddock %s"), *P.PaddockId);
+	});
+
+	SubIdWaterRestored = Bus.WaterAccessRestored.Subscribe([this](const FWaterAccessRestoredPayload& P)
+	{
+		OnWaterAccessRestored.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] WaterAccessRestored: paddock %s"), *P.PaddockId);
+	});
+
+	SubIdBoreFailed = Bus.BoreFailed.Subscribe([this](const FBoreFailedPayload& P)
+	{
+		OnBoreFailed.Broadcast(P);
+		const FString Joined = FString::Join(P.PaddockIds, TEXT("+"));
+		UE_LOG(LogTemp, Warning, TEXT("[TaraSim] BoreFailed: %s (paddocks: %s)"), *P.BoreId, *Joined);
+	});
+
+	SubIdBoreRepaired = Bus.BoreRepaired.Subscribe([this](const FBoreRepairedPayload& P)
+	{
+		OnBoreRepaired.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] BoreRepaired: %s"), *P.BoreId);
+	});
 }
 
 void UTaraSimSubsystem::UnwireSimEvents()
@@ -109,11 +148,18 @@ void UTaraSimSubsystem::UnwireSimEvents()
 	if (SubIdDayEnded != -1)      { Bus.DayEnded.Unsubscribe(SubIdDayEnded); SubIdDayEnded = -1; }
 	if (SubIdCattleDied != -1)    { Bus.CattleDied.Unsubscribe(SubIdCattleDied); SubIdCattleDied = -1; }
 	if (SubIdHerdCondition != -1) { Bus.HerdConditionChanged.Unsubscribe(SubIdHerdCondition); SubIdHerdCondition = -1; }
+	if (SubIdWaterLost != -1)     { Bus.WaterAccessLost.Unsubscribe(SubIdWaterLost); SubIdWaterLost = -1; }
+	if (SubIdWaterRestored != -1) { Bus.WaterAccessRestored.Unsubscribe(SubIdWaterRestored); SubIdWaterRestored = -1; }
+	if (SubIdBoreFailed != -1)    { Bus.BoreFailed.Unsubscribe(SubIdBoreFailed); SubIdBoreFailed = -1; }
+	if (SubIdBoreRepaired != -1)  { Bus.BoreRepaired.Unsubscribe(SubIdBoreRepaired); SubIdBoreRepaired = -1; }
 }
 
 FString UTaraSimSubsystem::GetSaveFilePath() const
 {
-	return FPaths::ProjectSavedDir() / TEXT("tara-save-3d-v1-phase0.json");
+	// Schema-versioned filename mirrors the 2D project's localStorage key pattern.
+	// Bump on every milestone; mismatched older files discard cleanly via
+	// FStation::FromJson returning nullptr on version mismatch.
+	return FPaths::ProjectSavedDir() / TEXT("tara-save-3d-v2-m2.json");
 }
 
 bool UTaraSimSubsystem::TryLoadFromDisk()
