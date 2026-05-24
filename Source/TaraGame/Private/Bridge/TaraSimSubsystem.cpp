@@ -475,6 +475,64 @@ void UTaraSimSubsystem::SetCohortMusterTrainedness(int32 BirthYear, float Value)
 	}
 }
 
+bool UTaraSimSubsystem::WeanCohort(int32 CalfCohortBirthYear)
+{
+	return Station ? Station->WeanCohort(CalfCohortBirthYear) : false;
+}
+
+bool UTaraSimSubsystem::IsCohortLactating(int32 BirthYear) const
+{
+	if (!Station) return false;
+	for (const FCattleCohort& C : Station->GetHerd().Cohorts)
+	{
+		if (C.BirthYear == BirthYear) return C.bLactating;
+	}
+	return false;
+}
+
+int32 UTaraSimSubsystem::GetCohortBrandedDay(int32 BirthYear) const
+{
+	if (!Station) return 0;
+	for (const FCattleCohort& C : Station->GetHerd().Cohorts)
+	{
+		if (C.BirthYear == BirthYear) return C.BrandedDay;
+	}
+	return 0;
+}
+
+bool UTaraSimSubsystem::IsCohortHorned(int32 BirthYear) const
+{
+	if (!Station) return false;
+	for (const FCattleCohort& C : Station->GetHerd().Cohorts)
+	{
+		if (C.BirthYear == BirthYear) return C.bHorned;
+	}
+	return false;
+}
+
+bool UTaraSimSubsystem::RecordBrandingDay(int32 CohortBirthYear, int32 HeadProcessed, bool bDehorned)
+{
+	if (!Station) return false;
+	bool bFound = false;
+	for (FCattleCohort& C : Station->GetHerd().Cohorts)
+	{
+		if (C.BirthYear == CohortBirthYear)
+		{
+			C.BrandedDay = Station->GetClock().DayOfYear;
+			if (bDehorned) C.bHorned = false;
+			bFound = true;
+			break;
+		}
+	}
+	if (!bFound) return false;
+
+	// Player skill bump — 0.5 * processed / 10 per spec, clamped 0..100.
+	const float SkillBump = 0.5f * (float)FMath::Max(0, HeadProcessed) / 10.0f;
+	Station->GetPlayer().Skills.Animals = FMath::Min(100.0f,
+		Station->GetPlayer().Skills.Animals + SkillBump);
+	return true;
+}
+
 float UTaraSimSubsystem::GetSecondsPerInGameDay() const
 {
 	return Station ? Station->GetClock().RealSecondsPerInGameDay
@@ -798,6 +856,20 @@ void UTaraSimSubsystem::WireSimEventsToDelegates()
 		UE_LOG(LogTemp, Display, TEXT("[TaraSim] FenceRepaired: %s"), *P.FenceId);
 	});
 
+	SubIdCohortWeaned = Bus.CohortWeaned.Subscribe([this](const FCohortWeanedPayload& P)
+	{
+		OnCohortWeaned.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] CohortWeaned: calf cohort %d (dam %d)"),
+			P.CalfCohortBirthYear, P.DamCohortBirthYear);
+	});
+
+	SubIdCohortSplit = Bus.CohortSplit.Subscribe([this](const FCohortSplitPayload& P)
+	{
+		OnCohortSplit.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] CohortSplit: source %d -> %d sub-cohorts"),
+			P.SourceCohortBirthYear, P.NumSplits);
+	});
+
 	SubIdRoadGraded = Bus.RoadGraded.Subscribe([this](const FRoadGradedPayload& P)
 	{
 		OnRoadGraded.Broadcast(P);
@@ -851,6 +923,8 @@ void UTaraSimSubsystem::UnwireSimEvents()
 	if (SubIdSensorBatterySwapped != -1){ Bus.SensorBatterySwapped.Unsubscribe(SubIdSensorBatterySwapped); SubIdSensorBatterySwapped = -1; }
 	if (SubIdFenceRepaired != -1)   { Bus.FenceRepaired.Unsubscribe(SubIdFenceRepaired); SubIdFenceRepaired = -1; }
 	if (SubIdRoadGraded != -1)      { Bus.RoadGraded.Unsubscribe(SubIdRoadGraded); SubIdRoadGraded = -1; }
+	if (SubIdCohortWeaned != -1)    { Bus.CohortWeaned.Unsubscribe(SubIdCohortWeaned); SubIdCohortWeaned = -1; }
+	if (SubIdCohortSplit != -1)     { Bus.CohortSplit.Unsubscribe(SubIdCohortSplit); SubIdCohortSplit = -1; }
 }
 
 FString UTaraSimSubsystem::GetSaveFilePath() const
@@ -858,7 +932,7 @@ FString UTaraSimSubsystem::GetSaveFilePath() const
 	// Schema-versioned filename mirrors the 2D project's localStorage key pattern.
 	// Bump on every milestone; mismatched older files discard cleanly via
 	// FStation::FromJson returning nullptr on version mismatch.
-	return FPaths::ProjectSavedDir() / TEXT("tara-save-3d-v8-m8.json");
+	return FPaths::ProjectSavedDir() / TEXT("tara-save-3d-v9-phase5-prereqs.json");
 }
 
 bool UTaraSimSubsystem::TryLoadFromDisk()

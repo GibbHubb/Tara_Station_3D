@@ -10,6 +10,9 @@ FCattleCohort::FCattleCohort(const FCattleCohortConfig& Config)
 	, BehaviourProfile(Config.BehaviourProfile)
 	, MusterTrainedness(Config.MusterTrainedness)
 	, BreederStage(Config.BreederStage)
+	, bLactating(Config.bLactating)
+	, BrandedDay(Config.BrandedDay)
+	, bHorned(Config.bHorned)
 {
 }
 
@@ -41,10 +44,13 @@ float FCattleCohort::EffectiveMusterDifficulty() const
 FString FCattleCohort::SerializeJson() const
 {
 	return FString::Printf(
-		TEXT("{\"birthYear\":%d,\"count\":%d,\"sexRatio\":%.3f,\"conditionMean\":%.2f,\"conditionVariance\":%.2f,\"state\":%d,\"behaviourProfile\":%d,\"consecutiveStarvationDays\":%d,\"musterTrainedness\":%.2f,\"breederStage\":%d}"),
+		TEXT("{\"birthYear\":%d,\"count\":%d,\"sexRatio\":%.3f,\"conditionMean\":%.2f,\"conditionVariance\":%.2f,\"state\":%d,\"behaviourProfile\":%d,\"consecutiveStarvationDays\":%d,\"musterTrainedness\":%.2f,\"breederStage\":%d,\"lactating\":%s,\"brandedDay\":%d,\"horned\":%s}"),
 		BirthYear, Count, SexRatio, ConditionMean, ConditionVariance,
 		(int32)State, (int32)BehaviourProfile, ConsecutiveStarvationDays,
-		MusterTrainedness, (int32)BreederStage);
+		MusterTrainedness, (int32)BreederStage,
+		bLactating ? TEXT("true") : TEXT("false"),
+		BrandedDay,
+		bHorned ? TEXT("true") : TEXT("false"));
 }
 
 FCattleCohort FCattleCohort::FromJson(const FString& Json)
@@ -95,11 +101,23 @@ FCattleCohort FCattleCohort::FromJson(const FString& Json)
 
 	// New fields default to whatever the in-memory struct already has — JSON
 	// keys absent from older saves leave fields at the FCattleCohortConfig
-	// defaults set in the ctor (MusterTrainedness=50, BreederStage=NotPregnant).
+	// defaults set in the ctor.
 	ReadFloat(TEXT("musterTrainedness"), Result.MusterTrainedness);
 	int32 StageInt = (int32)Result.BreederStage;
 	ReadInt(TEXT("breederStage"), StageInt);
 	Result.BreederStage = (EBreederStage)StageInt;
+
+	// Phase 5+ fields — forward-compat: absent JSON keys leave the ctor defaults.
+	auto ReadBool = [&](const TCHAR* Key, bool& Out)
+	{
+		const FString Token = FString::Printf(TEXT("\"%s\":"), Key);
+		const int32 Idx = Json.Find(Token);
+		if (Idx == INDEX_NONE) return;
+		Out = Json.Mid(Idx + Token.Len(), 4).StartsWith(TEXT("true"));
+	};
+	ReadBool(TEXT("lactating"), Result.bLactating);
+	ReadInt(TEXT("brandedDay"), Result.BrandedDay);
+	ReadBool(TEXT("horned"), Result.bHorned);
 
 	return Result;
 }

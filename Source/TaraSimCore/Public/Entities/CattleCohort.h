@@ -53,6 +53,9 @@ struct FCattleCohortConfig
 	EBehaviourProfile BehaviourProfile = EBehaviourProfile::Calm;
 	float MusterTrainedness = 0.0f; // 0..100 — see field doc below
 	EBreederStage BreederStage = EBreederStage::NotPregnant;
+	bool bLactating = false;        // see field doc below
+	int32 BrandedDay = 0;           // see field doc below
+	bool bHorned = false;            // see field doc below
 };
 
 class TARASIMCORE_API FCattleCohort
@@ -104,4 +107,21 @@ public:
 	// route cows through gates by stage. BreedingSystem advances it as
 	// gestation progresses; resets to NotPregnant after calving.
 	EBreederStage BreederStage = EBreederStage::NotPregnant;
+
+	// Per CORE_LOOP §2 + TS-3D-WEANER-SCHOOL design: while a breeder cohort
+	// has dependent calves, it is lactating. ConditionSystem applies a
+	// -0.2/day extra drift on the cohort (the cost of producing milk). The
+	// wean event (Station::WeanCohort) flips this false + the cohort's
+	// condition recovers naturally. Body-score-protection IS this flag
+	// switching off — that's why weaning timing matters per CORE_LOOP §2.
+	bool bLactating = false;
+
+	// Day-of-year the cohort was last branded (TS-3D-BRANDING). 0 = never
+	// branded. The year-end progression score bonuses a fully-branded year.
+	int32 BrandedDay = 0;
+
+	// Set ~30% of the time when BreedingSystem creates a new Unweaned cohort
+	// (mixed-breed default; tune per cohort lineage in Phase 5+). Drives the
+	// dehorning step at branding; cleared once dehorned.
+	bool bHorned = false;
 };

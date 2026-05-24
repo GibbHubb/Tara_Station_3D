@@ -293,5 +293,19 @@ struct FRoadGradedPayload
 	FString RoadId;
 };
 
+// ---- Phase 5+ cohort lifecycle (TS-3D-WEANER-SCHOOL + TS-3D-PREG-TEST) ----
+
+struct FCohortWeanedPayload
+{
+	int32 CalfCohortBirthYear = 0;
+	int32 DamCohortBirthYear = 0;   // -1 if dam not found
+};
+
+struct FCohortSplitPayload
+{
+	int32 SourceCohortBirthYear = 0;
+	int32 NumSplits = 0;            // how many new sub-cohorts were created
+};
+
 // Later milestones extend this file. Keep it the only place payload shapes are
 // declared — that way the EventBus.h template just refers to types from here.

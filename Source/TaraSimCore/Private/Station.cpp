@@ -388,6 +388,121 @@ bool FStation::GradeRoad(const FString& RoadId)
 	return false;
 }
 
+bool FStation::WeanCohort(int32 CalfCohortBirthYear)
+{
+	// Find the calf cohort + flip Unweaned → Weaner.
+	FCattleCohort* Calf = nullptr;
+	for (FCattleCohort& C : Herd.Cohorts)
+	{
+		if (C.BirthYear == CalfCohortBirthYear && C.State == ECohortState::Unweaned)
+		{
+			Calf = &C;
+			break;
+		}
+	}
+	if (!Calf) return false;
+
+	Calf->State = ECohortState::Weaner;
+	Calf->MusterTrainedness = 0.0f;   // schooling starts now
+
+	// Find the lactating dam cohort (any breeder/heifer with bLactating == true).
+	// Our aggregate-cohort model doesn't track per-individual dam-of relations;
+	// the dam IS the lactating breeder cohort.
+	int32 DamBirthYear = -1;
+	for (FCattleCohort& C : Herd.Cohorts)
+	{
+		if (C.bLactating &&
+			(C.State == ECohortState::Breeder || C.State == ECohortState::Heifer))
+		{
+			C.bLactating = false;
+			DamBirthYear = C.BirthYear;
+			break;
+		}
+	}
+
+	FCohortWeanedPayload P;
+	P.CalfCohortBirthYear = CalfCohortBirthYear;
+	P.DamCohortBirthYear = DamBirthYear;
+	Bus.CohortWeaned.Emit(P);
+	return true;
+}
+
+int32 FStation::SplitCohort(int32 SourceCohortBirthYear, const TArray<FCohortSplitRequest>& Splits)
+{
+	if (Splits.Num() == 0) return 0;
+
+	// Find the source cohort.
+	int32 SrcIdx = -1;
+	for (int32 I = 0; I < Herd.Cohorts.Num(); I++)
+	{
+		if (Herd.Cohorts[I].BirthYear == SourceCohortBirthYear)
+		{
+			SrcIdx = I;
+			break;
+		}
+	}
+	if (SrcIdx == -1) return 0;
+
+	// Snapshot the source by value (appending new cohorts may invalidate any
+	// reference into the TArray on growth).
+	const FCattleCohort Source = Herd.Cohorts[SrcIdx];
+	const int32 SourceCount = Source.Count;
+	if (SourceCount <= 0) return 0;
+
+	int32 RequestedTotal = 0;
+	for (const FCohortSplitRequest& R : Splits) RequestedTotal += FMath::Max(0, R.Count);
+	if (RequestedTotal <= 0) return 0;
+
+	// Allocate counts proportionally to the requested split sizes, total
+	// clamped to SourceCount. Any rounding leftover lands on the LAST entry
+	// so we never lose head.
+	TArray<int32> ActualCounts;
+	ActualCounts.Reserve(Splits.Num());
+	int32 AllocatedTotal = 0;
+	for (int32 I = 0; I < Splits.Num(); I++)
+	{
+		const float Fraction = (RequestedTotal > 0)
+			? (float)FMath::Max(0, Splits[I].Count) / (float)RequestedTotal
+			: 0.0f;
+		int32 Alloc = (I == Splits.Num() - 1)
+			? (SourceCount - AllocatedTotal)
+			: FMath::FloorToInt(SourceCount * Fraction);
+		Alloc = FMath::Max(0, Alloc);
+		ActualCounts.Add(Alloc);
+		AllocatedTotal += Alloc;
+	}
+
+	// Remove the source cohort. Append the new sub-cohorts.
+	Herd.Cohorts.RemoveAt(SrcIdx);
+
+	int32 Created = 0;
+	for (int32 I = 0; I < Splits.Num(); I++)
+	{
+		if (ActualCounts[I] <= 0) continue;
+		FCattleCohortConfig Cfg;
+		Cfg.BirthYear = Source.BirthYear;
+		Cfg.Count = ActualCounts[I];
+		Cfg.SexRatio = Source.SexRatio;
+		Cfg.ConditionMean = Source.ConditionMean;
+		Cfg.ConditionVariance = Source.ConditionVariance;
+		Cfg.State = Source.State;
+		Cfg.BehaviourProfile = Source.BehaviourProfile;
+		Cfg.MusterTrainedness = Source.MusterTrainedness;
+		Cfg.bLactating = Source.bLactating;
+		Cfg.BrandedDay = Source.BrandedDay;
+		Cfg.bHorned = Source.bHorned;
+		Cfg.BreederStage = Splits[I].Stage;   // the field that diverges per split
+		Herd.Cohorts.Add(FCattleCohort(Cfg));
+		Created++;
+	}
+
+	FCohortSplitPayload P;
+	P.SourceCohortBirthYear = SourceCohortBirthYear;
+	P.NumSplits = Created;
+	Bus.CohortSplit.Emit(P);
+	return Created;
+}
+
 void FStation::TickInfrastructure()
 {
 	// Daily decay constants — mirror 2D defaults.

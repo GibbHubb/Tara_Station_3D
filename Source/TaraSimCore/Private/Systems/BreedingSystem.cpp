@@ -125,11 +125,30 @@ void FBreedingSystem::Calf(const FPregnantRecord& Record)
 		Cfg.Count = Survivors;
 		Cfg.State = ECohortState::Unweaned;
 		Cfg.ConditionMean = 75.0f;
+		// Phase 5+ prereq — bHorned roll: ~30% of new Unweaned cohorts will
+		// need dehorning at branding. Mixed-breed default per CORE_LOOP §2.
+		Cfg.bHorned = (FMath::FRand() < 0.30f);
+		// Fresh weaners haven't been schooled yet — start at 0, rises via
+		// the weaner-school sub-scene (TS-3D-WEANER-SCHOOL).
+		Cfg.MusterTrainedness = 0.0f;
 		Station.GetHerd().Cohorts.Add(FCattleCohort(Cfg));
 	}
 	else
 	{
 		CalfCohort->Count += Survivors;
+	}
+
+	// Flip dam cohort lactating — body-score-protection won't engage until
+	// the player weans (Station::WeanCohort). ConditionSystem applies the
+	// -0.2/day extra drift while this flag is set.
+	for (FCattleCohort& C : Station.GetHerd().Cohorts)
+	{
+		if (C.BirthYear == Record.DamCohortBirthYear &&
+			(C.State == ECohortState::Breeder || C.State == ECohortState::Heifer))
+		{
+			C.bLactating = true;
+			break;
+		}
 	}
 
 	FCalfBornPayload P;

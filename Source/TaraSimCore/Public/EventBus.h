@@ -125,4 +125,8 @@ public:
 	TEvent<FSensorBatterySwappedPayload> SensorBatterySwapped;
 	TEvent<FFenceRepairedPayload> FenceRepaired;
 	TEvent<FRoadGradedPayload> RoadGraded;
+
+	// Phase 5+ cohort lifecycle.
+	TEvent<FCohortWeanedPayload> CohortWeaned;
+	TEvent<FCohortSplitPayload> CohortSplit;
 };

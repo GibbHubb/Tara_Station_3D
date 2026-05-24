@@ -45,8 +45,16 @@ void FConditionSystem::ApplyDelta(FHerd& Herd, float Delta, const FString& HerdI
 	{
 		if (Cohort.Count <= 0) continue;
 
+		// Phase 5+ — lactation cost. Stacks on top of the herd-wide grass/water
+		// delta. Body-score-protection engages when Station::WeanCohort flips
+		// this off; the dam's condition then recovers naturally per the grass
+		// math above. Per CORE_LOOP §2 this is THE reason weaning timing matters.
+		const float CohortDelta = Cohort.bLactating
+			? (Delta - LactationExtraDecay)
+			: Delta;
+
 		const float Prev = Cohort.ConditionMean;
-		Cohort.ConditionMean = FCattleCohort::ClampCondition(Prev + Delta);
+		Cohort.ConditionMean = FCattleCohort::ClampCondition(Prev + CohortDelta);
 
 		if (Cohort.ConditionMean < StarvationCondition)
 		{
@@ -76,7 +84,7 @@ void FConditionSystem::ApplyDelta(FHerd& Herd, float Delta, const FString& HerdI
 			}
 		}
 
-		if (Delta != 0.0f && Cohort.ConditionMean != Prev)
+		if (CohortDelta != 0.0f && Cohort.ConditionMean != Prev)
 		{
 			FHerdConditionChangedPayload P;
 			P.HerdId = HerdId;

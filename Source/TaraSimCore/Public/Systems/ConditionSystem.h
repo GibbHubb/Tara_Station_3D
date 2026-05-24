@@ -27,6 +27,12 @@ public:
 	static constexpr float WaterLowExtraDecay = 0.4f;
 	static constexpr float WaterNoneExtraDecay = 1.5f;
 
+	// Phase 5+ — lactation cost per CORE_LOOP §2 + TS-3D-WEANER-SCHOOL.
+	// Applied per-cohort (only on bLactating ones), on top of the herd-wide
+	// grass/water delta. Body-score-protection IS this drift switching off
+	// when the player weans (Station::WeanCohort flips bLactating false).
+	static constexpr float LactationExtraDecay = 0.2f;
+
 	static constexpr float StarvationCondition = 20.0f;
 	static constexpr int32 StarvationGraceDays = 3;
 	static constexpr float DeathFractionPerDay = 0.05f;

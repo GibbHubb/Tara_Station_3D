@@ -25,7 +25,7 @@
 
 // Save-schema version. Bumps on any breaking sim shape change. Loading a save
 // with a mismatched version is treated as "no save" (start fresh).
-#define TARA_SIM_SAVE_SCHEMA_VERSION TEXT("tara-save-3d-v8-m8")
+#define TARA_SIM_SAVE_SCHEMA_VERSION TEXT("tara-save-3d-v9-phase5-prereqs")
 
 // Adjacency between paddocks — paddock id → list of adjacent paddock ids.
 // Phase 0 carries this as explicit state (mirroring the 2D model). Phase 2
@@ -167,6 +167,26 @@ public:
 	// M8 — grade a road back up (mirrors 2D — +50 grade quality, emits
 	// RoadGraded). RepairFence (existing) emits FenceRepaired in M8.
 	bool GradeRoad(const FString& RoadId);
+
+	// Phase 5+ TS-3D-WEANER-SCHOOL — wean a calf cohort. State Unweaned →
+	// Weaner; matching dam cohort's bLactating → false (body-score-protection
+	// engages); MusterTrainedness reset to 0 (rises in the WeanerCorner via
+	// the existing SetCohortMusterTrainedness bridge). Emits CohortWeaned.
+	// Returns false if the calf cohort doesn't exist or is already weaned.
+	bool WeanCohort(int32 CalfCohortBirthYear);
+
+	// Phase 5+ TS-3D-PREG-TEST — fission a cohort by stage. The source cohort's
+	// Count is partitioned across N new cohorts (one per split request); each
+	// inherits the source's BirthYear/State/behaviour/condition but gets its
+	// own BreederStage tag. The source is removed; sum is clamped to source
+	// count, with rounding leftover absorbed by the last split.
+	// Returns the number of new cohorts created (0 on failure).
+	struct FCohortSplitRequest
+	{
+		EBreederStage Stage = EBreederStage::NotPregnant;
+		int32 Count = 0;
+	};
+	int32 SplitCohort(int32 SourceCohortBirthYear, const TArray<FCohortSplitRequest>& Splits);
 
 	// Serialisation — JSON snapshot, schema-versioned. See SaveManager pattern
 	// in the 2D project's src/sim/SaveManager.ts.

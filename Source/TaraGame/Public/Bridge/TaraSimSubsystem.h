@@ -73,6 +73,10 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraRoadGraded, const FRoadGradedPayload&
 // is the right layer for this. Per TS-3D-TWO-SEASON-MODE plan step 1.
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnTaraSeasonChanged, ESeason /*From*/, ESeason /*To*/);
 
+// Phase 5+ cohort lifecycle delegates — re-emit from FEventBus.
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraCohortWeaned, const FCohortWeanedPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraCohortSplit, const FCohortSplitPayload&);
+
 /**
  * UTaraSimSubsystem — the bridge between the engine-agnostic FStation (pure C++
  * sim from TaraSimCore) and the UE5 runtime. There is ONE Station per game
@@ -324,6 +328,28 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Tara|Cohorts")
 	void SetCohortMusterTrainedness(int32 BirthYear, float Value);
 
+	// Phase 5+ TS-3D-WEANER-SCHOOL — wean a calf cohort (Unweaned → Weaner +
+	// dam.bLactating → false). Returns false if calf cohort missing/already
+	// weaned. Emits OnCohortWeaned.
+	UFUNCTION(BlueprintCallable, Category = "Tara|Cohorts")
+	bool WeanCohort(int32 CalfCohortBirthYear);
+
+	// Read-only cohort flags useful for HUD.
+	UFUNCTION(BlueprintPure, Category = "Tara|Cohorts")
+	bool IsCohortLactating(int32 BirthYear) const;
+
+	UFUNCTION(BlueprintPure, Category = "Tara|Cohorts")
+	int32 GetCohortBrandedDay(int32 BirthYear) const;
+
+	UFUNCTION(BlueprintPure, Category = "Tara|Cohorts")
+	bool IsCohortHorned(int32 BirthYear) const;
+
+	// Phase 5+ TS-3D-BRANDING — record a branding-day completion. Sets
+	// BrandedDay on the cohort + clears bHorned on dehorned cohorts +
+	// bumps Player.Skills.Animals. Returns false if cohort missing.
+	UFUNCTION(BlueprintCallable, Category = "Tara|Cohorts")
+	bool RecordBrandingDay(int32 CohortBirthYear, int32 HeadProcessed, bool bDehorned);
+
 	// Pacing dials (CORE_LOOP §7 — TUNABLE, do not hard-commit). Settings UI
 	// can mutate via SetSecondsPerInGameDay.
 	UFUNCTION(BlueprintPure, Category = "Tara|Pacing")
@@ -386,6 +412,8 @@ public:
 
 	// Bridge-synth (see comment near declaration above).
 	FOnTaraSeasonChanged OnSeasonChanged;
+	FOnTaraCohortWeaned OnCohortWeaned;
+	FOnTaraCohortSplit OnCohortSplit;
 
 private:
 	// Tracking for the synthesised OnSeasonChanged broadcast. Initialised in
@@ -437,6 +465,8 @@ private:
 	int32 SubIdSensorBatterySwapped = -1;
 	int32 SubIdFenceRepaired = -1;
 	int32 SubIdRoadGraded = -1;
+	int32 SubIdCohortWeaned = -1;
+	int32 SubIdCohortSplit = -1;
 
 	void WireSimEventsToDelegates();
 	void UnwireSimEvents();
