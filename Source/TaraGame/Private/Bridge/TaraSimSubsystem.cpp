@@ -49,6 +49,21 @@ void UTaraSimSubsystem::TickDay()
 	// The DayEnded event handler also writes; this is belt-and-braces during Phase 0.
 }
 
+void UTaraSimSubsystem::AdvanceRealTime(float DeltaSeconds)
+{
+	if (!Station || DeltaSeconds <= 0.0f) return;
+	// AdvanceRealTime returns true when the clock has hit the sleep boundary
+	// (Hour >= SleepHour). Per the AdvanceMinutes contract, the clock has
+	// reset Hour/Minute to WakeHour/0 but has NOT bumped DayOfYear — that's
+	// our job here. TickDay's DayStarted event emits with the (still-old) day
+	// before Clock.TickDay() inside it bumps DayOfYear and runs all systems
+	// for the new day.
+	if (Station->GetClock().AdvanceRealTime(DeltaSeconds))
+	{
+		Station->TickDay();
+	}
+}
+
 void UTaraSimSubsystem::SaveNow()
 {
 	WriteSaveToDisk();
@@ -418,6 +433,25 @@ int32 UTaraSimSubsystem::GetSensorBatteryDays(const FString& SensorId) const
 	if (!Station) return 0;
 	const FSensor* S = Station->GetSensorSystem().SensorById(SensorId);
 	return S ? S->BatteryDays : 0;
+}
+
+float UTaraSimSubsystem::GetSecondsPerInGameDay() const
+{
+	return Station ? Station->GetClock().RealSecondsPerInGameDay
+		: FSeasonClock::DefaultRealSecondsPerInGameDay;
+}
+
+void UTaraSimSubsystem::SetSecondsPerInGameDay(float Seconds)
+{
+	if (!Station) return;
+	// Clamp to a sane range — 60s (very fast) .. 7200s (2h/day). The
+	// CORE_LOOP §7 starting-hypothesis band is 1500..2700 (25-45 min).
+	Station->GetClock().RealSecondsPerInGameDay = FMath::Clamp(Seconds, 60.0f, 7200.0f);
+}
+
+int32 UTaraSimSubsystem::GetYearsToOwnerHypothesis() const
+{
+	return FProgressionSystem::DefaultYearsToOwnerHypothesis;
 }
 
 void UTaraSimSubsystem::WireSimEventsToDelegates()

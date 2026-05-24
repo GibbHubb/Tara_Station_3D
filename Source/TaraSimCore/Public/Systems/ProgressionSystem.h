@@ -54,6 +54,13 @@ public:
 	static constexpr int32 ManagerPropertyBuyPrice = 250000;
 	static constexpr int32 BankruptcyDebtDays = 60;
 
+	// Per CORE_LOOP §7 (Max's confirmed answer): ~4 in-game years for the
+	// ringer → manager → owner arc (≈1 ringer + ~2 manager + then owner).
+	// TUNABLE; set by feel in playtest alongside FSeasonClock's day length.
+	// Exposed as a static constant + bridge getter so UI / pacing tools can
+	// read the dial from one place.
+	static constexpr int32 DefaultYearsToOwnerHypothesis = 4;
+
 private:
 	FStation& Station;
 	FEventBus& Bus;

@@ -94,6 +94,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Tara")
 	void TickDay();
 
+	// Real-time advance — engine ticks call this each frame (typically from a
+	// GameMode Tick or the player Pawn). Converts real seconds into in-game
+	// minutes via FSeasonClock::AdvanceRealTime. Triggers Station::TickDay()
+	// internally when a full in-game day rolls (i.e. when 22:00 hits).
+	UFUNCTION(BlueprintCallable, Category = "Tara|Pacing")
+	void AdvanceRealTime(float DeltaSeconds);
+
 	UFUNCTION(BlueprintCallable, Category = "Tara")
 	void SaveNow();
 
@@ -293,6 +300,17 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Tara")
 	int32 GetSensorBatteryDays(const FString& SensorId) const;
+
+	// Pacing dials (CORE_LOOP §7 — TUNABLE, do not hard-commit). Settings UI
+	// can mutate via SetSecondsPerInGameDay.
+	UFUNCTION(BlueprintPure, Category = "Tara|Pacing")
+	float GetSecondsPerInGameDay() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Tara|Pacing")
+	void SetSecondsPerInGameDay(float Seconds);
+
+	UFUNCTION(BlueprintPure, Category = "Tara|Pacing")
+	int32 GetYearsToOwnerHypothesis() const;
 
 	// Direct C++ access for performance-sensitive reads (e.g. per-frame Actor
 	// updates). Blueprints should prefer the UFUNCTION getters above.

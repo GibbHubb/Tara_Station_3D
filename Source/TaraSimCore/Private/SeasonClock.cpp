@@ -22,19 +22,36 @@ bool FSeasonClock::AdvanceMinutes(int32 Minutes)
 		Minute -= 60;
 		Hour += 1;
 	}
-	if (Hour >= 24)
+	if (Hour >= SleepHour)
 	{
+		// Sleep boundary hit — reset clock to next morning's WakeHour. The
+		// CALLER is responsible for running Station::TickDay() if it wants
+		// the sim day-tick to fire (i.e. all systems advance). This is the
+		// contract the bridge expects: AdvanceMinutes returns true → bridge
+		// calls TickDay → TickDay's DayStarted event emits with the OLD day
+		// before Clock.TickDay() bumps DayOfYear and runs systems for the
+		// new day. (Compare: if AdvanceMinutes auto-bumped DayOfYear, the
+		// DayStarted event in TickDay would emit the stale-new day.)
 		Hour = WakeHour;
 		Minute = 0;
-		DayOfYear += 1;
-		if (DayOfYear > DaysPerYear)
-		{
-			DayOfYear = 1;
-			Year += 1;
-		}
 		return true;
 	}
 	return false;
+}
+
+bool FSeasonClock::AdvanceRealTime(float DeltaSeconds)
+{
+	if (DeltaSeconds <= 0.0f) return false;
+
+	const float SecPerMin = RealSecondsPerInGameMinute();
+	if (SecPerMin <= 0.0f) return false;
+
+	RealTimeAccumulatorSeconds += DeltaSeconds;
+	const int32 WholeMinutes = (int32)(RealTimeAccumulatorSeconds / SecPerMin);
+	if (WholeMinutes <= 0) return false;
+
+	RealTimeAccumulatorSeconds -= WholeMinutes * SecPerMin;
+	return AdvanceMinutes(WholeMinutes);
 }
 
 ESeason FSeasonClock::GetSeason() const
