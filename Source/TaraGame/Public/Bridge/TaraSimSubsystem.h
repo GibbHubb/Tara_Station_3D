@@ -350,6 +350,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Tara|Cohorts")
 	bool RecordBrandingDay(int32 CohortBirthYear, int32 HeadProcessed, bool bDehorned);
 
+	// Diagnostic — runs FSimSmokeTest against a FRESH FStation (does not
+	// touch the live game's Station) and logs PASS/FAIL via UE_LOG. Useful
+	// for verifying invariants after C++ changes. Callable from the in-game
+	// console as `Tara.RunSmokeTest <days>` (the Exec-tagged variant below).
+	UFUNCTION(BlueprintCallable, Category = "Tara|Diagnostics")
+	void RunSmokeTest(int32 Days);
+
 	// Pacing dials (CORE_LOOP §7 — TUNABLE, do not hard-commit). Settings UI
 	// can mutate via SetSecondsPerInGameDay.
 	UFUNCTION(BlueprintPure, Category = "Tara|Pacing")

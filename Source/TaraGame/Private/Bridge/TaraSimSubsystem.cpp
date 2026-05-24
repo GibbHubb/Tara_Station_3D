@@ -1,4 +1,5 @@
 #include "Bridge/TaraSimSubsystem.h"
+#include "Diagnostics/SimSmokeTest.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Entities/Supplement.h"
@@ -508,6 +509,13 @@ bool UTaraSimSubsystem::IsCohortHorned(int32 BirthYear) const
 		if (C.BirthYear == BirthYear) return C.bHorned;
 	}
 	return false;
+}
+
+void UTaraSimSubsystem::RunSmokeTest(int32 Days)
+{
+	UE_LOG(LogTemp, Display, TEXT("[TaraSim] Running sim smoke test (%d days, fresh Station)..."), Days);
+	const FSimSmokeTestResult Result = FSimSmokeTest::RunOnFreshStation(Days);
+	FSimSmokeTest::LogResult(Result);
 }
 
 bool UTaraSimSubsystem::RecordBrandingDay(int32 CohortBirthYear, int32 HeadProcessed, bool bDehorned)

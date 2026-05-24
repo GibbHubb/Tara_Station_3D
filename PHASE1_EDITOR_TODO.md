@@ -6,6 +6,28 @@
 
 ---
 
+## ✦ Refresh 2026-05-25 — what's changed since this doc was written
+
+The sim layer this doc was originally written against (M1 only) is now **complete 8/8** + has pacing dials + the bridge surface is full. Specifically:
+
+| What changed | What it means for Phase 1 |
+|---|---|
+| **Sim port 8/8 complete** (M1+M2+M3+M4a+M5+M6+M7+M8 all live; pacing dials shipped) | The vertical slice gets WAY more sim depth for free. The bore actor auto-fails/repairs (M2), the herd makes calves (M5), birds can be logged (M6) — even though Phase 1 doesn't visualise most of this. Save autosaves on `OnDayEnded` already. See [BRIDGE_API.md](BRIDGE_API.md) for the full bridge surface. |
+| **Engine version locked: UE5.4+** (newest stable — UE5.7 is fine) | Update `Tara_Station_3D.uproject`'s `EngineAssociation` to your installed version. World Partition is the default for new levels in 5.4+. |
+| **Project moved to `Bureaublad/code/Tara_Station_3D/`** | All paths in this doc that reference the old `Bureaublad/Tara_Station_3D/` location now have `code/` between them. |
+| **Pacing system: `UTaraSimSubsystem::AdvanceRealTime(DeltaSeconds)`** | **You don't need a `T` key binding to tick days anymore.** Wire `BP_TaraGameMode::Tick → Subsystem.AdvanceRealTime(Delta)` and the sim auto-advances at 30 in-game min / real-second by default (CORE_LOOP §7). Settings UI can mutate via `Subsystem.SetSecondsPerInGameDay(seconds)`. |
+| **TS-3D-TWO-SEASON-MODE C++ shipped** | When you finish the basic Phase 1 vertical slice and start on Phase 2, jump straight to [PHASE2_SHED_EDITOR_TODO.md](PHASE2_SHED_EDITOR_TODO.md) for the shed-action-menu hookup. The C++ widget base + DT_ShedActions CSV + bankruptcy override are already in place. |
+| **CORE_LOOP §7 daily-loop anchor** | Phase 1 vertical slice ideally now anchors at cottage→shed→quad→paddock→bore→return per MAP_BRIEF §7, not just "drive the quad around a paddock". You can either: (a) ship a stripped-down version (just the paddock + bore + quad) for the screenshot gate, then expand in Phase 2 via TS-3D-PHASE2-shed-cottage; (b) jump straight to a minimal cottage+shed setup. **Recommend (a)** — the screenshot gate is about the grass+dusk vision, not the daily loop. |
+| **Sim smoke test available** | Run `Tara.RunSmokeTest 365` from the in-game console once the project compiles. Logs PASS/FAIL — verifies the sim is alive and invariants hold over a simulated year. Use it as a first sanity check before doing any Editor work. |
+
+**Verify the sim is alive before doing any Editor work:** open the Editor, hit Play (PIE), and look at the Output Log. You should see `[TaraSim] Initialized. Year 1 Day 1 06:00 — herd 8 head`. If you see that line, the bridge is loading the FStation correctly and you can move to step 2 below.
+
+**The original steps below are still valid for the screenshot-gate work.** Read on.
+
+---
+
+---
+
 ## Order to do this in
 
 The order matters — some steps depend on the previous. Roughly 1–3 sessions of Editor work.
