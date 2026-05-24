@@ -9,6 +9,9 @@
 #include "Systems/MusteringSystem.h"
 #include "Systems/EventSystem.h"
 #include "Systems/BreedingSystem.h"
+#include "Systems/WildlifeSystem.h"
+#include "Entities/PestPresence.h"
+#include "Entities/InvasivePresence.h"
 
 void UTaraSimSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -130,6 +133,28 @@ void UTaraSimSubsystem::ResolveBadWeatherDecision(const FString& Choice)
 {
 	if (!Station) return;
 	Station->ResolveBadWeatherDecision(Choice);
+}
+
+int32 UTaraSimSubsystem::LogBird(const FString& SpeciesId)
+{
+	if (!Station) return 0;
+	return Station->GetWildlifeSystem().LogBird(SpeciesId).Payout;
+}
+
+bool UTaraSimSubsystem::ShootPest(const FString& PaddockId, const FString& Species)
+{
+	if (!Station) return false;
+	EPestSpecies S;
+	if (!TryParsePestSpecies(Species, S)) return false;
+	return Station->GetWildlifeSystem().ShootPest(PaddockId, S);
+}
+
+bool UTaraSimSubsystem::TreatInvasive(const FString& PaddockId, const FString& Species)
+{
+	if (!Station) return false;
+	EInvasiveSpecies S;
+	if (!TryParseInvasiveSpecies(Species, S)) return false;
+	return Station->GetWildlifeSystem().TreatInvasive(PaddockId, S);
 }
 
 int32 UTaraSimSubsystem::GetYear() const
@@ -278,6 +303,35 @@ int32 UTaraSimSubsystem::GetPregnantHead() const
 		Total += R.Count;
 	}
 	return Total;
+}
+
+int32 UTaraSimSubsystem::GetLoggedSpeciesCount() const
+{
+	return Station ? Station->GetWildlifeSystem().GetLoggedSpeciesCount() : 0;
+}
+
+float UTaraSimSubsystem::GetPestPopulation(const FString& PaddockId, const FString& Species) const
+{
+	if (!Station) return 0.0f;
+	EPestSpecies S;
+	if (!TryParsePestSpecies(Species, S)) return 0.0f;
+	for (const FPestEntry& E : Station->GetWildlifeSystem().GetPests())
+	{
+		if (E.PaddockId == PaddockId && E.Species == S) return E.Population;
+	}
+	return 0.0f;
+}
+
+float UTaraSimSubsystem::GetInvasiveCoverage(const FString& PaddockId, const FString& Species) const
+{
+	if (!Station) return 0.0f;
+	EInvasiveSpecies S;
+	if (!TryParseInvasiveSpecies(Species, S)) return 0.0f;
+	for (const FInvasiveEntry& E : Station->GetWildlifeSystem().GetInvasives())
+	{
+		if (E.PaddockId == PaddockId && E.Species == S) return E.Coverage;
+	}
+	return 0.0f;
 }
 
 void UTaraSimSubsystem::WireSimEventsToDelegates()
@@ -474,6 +528,41 @@ void UTaraSimSubsystem::WireSimEventsToDelegates()
 		UE_LOG(LogTemp, Display, TEXT("[TaraSim] CalfBorn: %d calves (cohort %d)"),
 			P.CalfCount, P.CohortBirthYear);
 	});
+
+	// M6 — wildlife + invasives.
+	SubIdBirdSighted = Bus.BirdSighted.Subscribe([this](const FBirdSightedPayload& P)
+	{
+		OnBirdSighted.Broadcast(P);
+	});
+
+	SubIdBirdLogged = Bus.BirdLogged.Subscribe([this](const FBirdLoggedPayload& P)
+	{
+		OnBirdLogged.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] BirdLogged: %s first=%s payout=$%d"),
+			*P.SpeciesId, P.bFirst ? TEXT("yes") : TEXT("no"), P.Payout);
+	});
+
+	SubIdPestShot = Bus.PestShot.Subscribe([this](const FPestShotPayload& P)
+	{
+		OnPestShot.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] PestShot: %s (paddock %s)"),
+			*PestSpeciesToString((EPestSpecies)P.Species), *P.PaddockId);
+	});
+
+	SubIdInvasiveTreated = Bus.InvasiveTreated.Subscribe([this](const FInvasiveTreatedPayload& P)
+	{
+		OnInvasiveTreated.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] InvasiveTreated: %s @ %s coverage=%.1f"),
+			*InvasiveSpeciesToString((EInvasiveSpecies)P.Species), *P.PaddockId, P.NewCoverage);
+	});
+
+	SubIdInvasiveSpread = Bus.InvasiveSpread.Subscribe([this](const FInvasiveSpreadPayload& P)
+	{
+		OnInvasiveSpread.Broadcast(P);
+		UE_LOG(LogTemp, Warning, TEXT("[TaraSim] InvasiveSpread: %s -> %s (%s)"),
+			*P.FromPaddockId, *P.ToPaddockId,
+			*InvasiveSpeciesToString((EInvasiveSpecies)P.Species));
+	});
 }
 
 void UTaraSimSubsystem::UnwireSimEvents()
@@ -508,6 +597,11 @@ void UTaraSimSubsystem::UnwireSimEvents()
 	if (SubIdBreedingWindowOpened != -1) { Bus.BreedingWindowOpened.Unsubscribe(SubIdBreedingWindowOpened); SubIdBreedingWindowOpened = -1; }
 	if (SubIdBreedingConceived != -1)    { Bus.BreedingConceived.Unsubscribe(SubIdBreedingConceived); SubIdBreedingConceived = -1; }
 	if (SubIdCalfBorn != -1)        { Bus.CalfBorn.Unsubscribe(SubIdCalfBorn); SubIdCalfBorn = -1; }
+	if (SubIdBirdSighted != -1)     { Bus.BirdSighted.Unsubscribe(SubIdBirdSighted); SubIdBirdSighted = -1; }
+	if (SubIdBirdLogged != -1)      { Bus.BirdLogged.Unsubscribe(SubIdBirdLogged); SubIdBirdLogged = -1; }
+	if (SubIdPestShot != -1)        { Bus.PestShot.Unsubscribe(SubIdPestShot); SubIdPestShot = -1; }
+	if (SubIdInvasiveTreated != -1) { Bus.InvasiveTreated.Unsubscribe(SubIdInvasiveTreated); SubIdInvasiveTreated = -1; }
+	if (SubIdInvasiveSpread != -1)  { Bus.InvasiveSpread.Unsubscribe(SubIdInvasiveSpread); SubIdInvasiveSpread = -1; }
 }
 
 FString UTaraSimSubsystem::GetSaveFilePath() const
@@ -515,7 +609,7 @@ FString UTaraSimSubsystem::GetSaveFilePath() const
 	// Schema-versioned filename mirrors the 2D project's localStorage key pattern.
 	// Bump on every milestone; mismatched older files discard cleanly via
 	// FStation::FromJson returning nullptr on version mismatch.
-	return FPaths::ProjectSavedDir() / TEXT("tara-save-3d-v5-m5.json");
+	return FPaths::ProjectSavedDir() / TEXT("tara-save-3d-v6-m6.json");
 }
 
 bool UTaraSimSubsystem::TryLoadFromDisk()

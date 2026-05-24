@@ -18,10 +18,11 @@
 #include "Systems/MusteringSystem.h"
 #include "Systems/EventSystem.h"
 #include "Systems/BreedingSystem.h"
+#include "Systems/WildlifeSystem.h"
 
 // Save-schema version. Bumps on any breaking sim shape change. Loading a save
 // with a mismatched version is treated as "no save" (start fresh).
-#define TARA_SIM_SAVE_SCHEMA_VERSION TEXT("tara-save-3d-v5-m5")
+#define TARA_SIM_SAVE_SCHEMA_VERSION TEXT("tara-save-3d-v6-m6")
 
 // Adjacency between paddocks — paddock id → list of adjacent paddock ids.
 // Phase 0 carries this as explicit state (mirroring the 2D model). Phase 2
@@ -87,6 +88,10 @@ public:
 	const FEventSystem& GetEventSystem() const { return *EventSys; }
 	FBreedingSystem& GetBreedingSystem() { return *BreedingSys; }
 	const FBreedingSystem& GetBreedingSystem() const { return *BreedingSys; }
+
+	// M6 accessors.
+	FWildlifeSystem& GetWildlifeSystem() { return *WildlifeSys; }
+	const FWildlifeSystem& GetWildlifeSystem() const { return *WildlifeSys; }
 
 	const FPaddock* PaddockById(const FString& Id) const;
 	FPaddock* PaddockById(const FString& Id);
@@ -161,6 +166,7 @@ private:
 	TUniquePtr<FMusteringSystem> MusterSys;
 	TUniquePtr<FEventSystem> EventSys;
 	TUniquePtr<FBreedingSystem> BreedingSys;
+	TUniquePtr<FWildlifeSystem> WildlifeSys;
 	TUniquePtr<FConditionSystem> ConditionSys;
 
 	// Default-seed helper — fills paddocks + herd + bores + adjacency to the

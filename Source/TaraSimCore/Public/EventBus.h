@@ -106,5 +106,12 @@ public:
 	TEvent<FBreedingConceivedPayload> BreedingConceived;
 	TEvent<FCalfBornPayload> CalfBorn;
 
+	// M6 events.
+	TEvent<FBirdSightedPayload> BirdSighted;
+	TEvent<FBirdLoggedPayload> BirdLogged;
+	TEvent<FPestShotPayload> PestShot;
+	TEvent<FInvasiveTreatedPayload> InvasiveTreated;
+	TEvent<FInvasiveSpreadPayload> InvasiveSpread;
+
 	// Future milestones extend this list.
 };

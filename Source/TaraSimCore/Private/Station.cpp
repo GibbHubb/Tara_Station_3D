@@ -14,6 +14,8 @@ FStation::FStation()
 	MusterSys = MakeUnique<FMusteringSystem>(*this, Bus);
 	EventSys = MakeUnique<FEventSystem>(*this, Bus);
 	BreedingSys = MakeUnique<FBreedingSystem>(*this, Bus);
+	WildlifeSys = MakeUnique<FWildlifeSystem>(*this, Bus);
+	WildlifeSys->InitDefaults();
 	ConditionSys = MakeUnique<FConditionSystem>(Bus, *this);
 }
 
@@ -122,6 +124,7 @@ void FStation::TickDay()
 	TickInfrastructure();
 	EventSys->TickDay();
 	BreedingSys->TickDay();
+	WildlifeSys->TickDay();
 	ConditionSys->TickDay();
 	Player.DaysOnStation += 1;
 
@@ -412,9 +415,10 @@ FString FStation::SerializeJson() const
 
 	const FString EventsJson = EventSys ? EventSys->SerializeJson() : TEXT("{}");
 	const FString BreedingJson = BreedingSys ? BreedingSys->SerializeJson() : TEXT("{}");
+	const FString WildlifeJson = WildlifeSys ? WildlifeSys->SerializeJson() : TEXT("{}");
 
 	return FString::Printf(
-		TEXT("{\"schemaVersion\":\"%s\",\"clock\":%s,\"paddocks\":%s,\"herd\":%s,\"adjacency\":%s,\"bores\":%s,\"player\":%s,\"prices\":%s,\"economy\":%s,\"hands\":%s,\"vehicles\":%s,\"fences\":%s,\"roads\":%s,\"events\":%s,\"breeding\":%s}"),
+		TEXT("{\"schemaVersion\":\"%s\",\"clock\":%s,\"paddocks\":%s,\"herd\":%s,\"adjacency\":%s,\"bores\":%s,\"player\":%s,\"prices\":%s,\"economy\":%s,\"hands\":%s,\"vehicles\":%s,\"fences\":%s,\"roads\":%s,\"events\":%s,\"breeding\":%s,\"wildlife\":%s}"),
 		TARA_SIM_SAVE_SCHEMA_VERSION,
 		*Clock.SerializeJson(),
 		*PaddocksJson,
@@ -429,7 +433,8 @@ FString FStation::SerializeJson() const
 		*FencesJson,
 		*RoadsJson,
 		*EventsJson,
-		*BreedingJson);
+		*BreedingJson,
+		*WildlifeJson);
 }
 
 namespace
@@ -673,6 +678,11 @@ TUniquePtr<FStation> FStation::FromJson(const FString& Json)
 	{
 		const FString BreedingJson = ExtractObject(Json, TEXT("\"breeding\":"));
 		if (!BreedingJson.IsEmpty() && Station->BreedingSys) Station->BreedingSys->LoadFromJson(BreedingJson);
+	}
+	// M6 — wildlife sub-object.
+	{
+		const FString WildlifeJson = ExtractObject(Json, TEXT("\"wildlife\":"));
+		if (!WildlifeJson.IsEmpty() && Station->WildlifeSys) Station->WildlifeSys->LoadFromJson(WildlifeJson);
 	}
 
 	// Reset water access cache for the restored topology.

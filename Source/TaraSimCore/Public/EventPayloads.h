@@ -200,5 +200,40 @@ struct FCalfBornPayload
 	int32 CalfCount = 0;
 };
 
+// ---- M6 — wildlife + invasives ----
+
+struct FBirdSightedPayload
+{
+	FString SpeciesId;
+	FString Name;
+};
+
+struct FBirdLoggedPayload
+{
+	FString SpeciesId;
+	int32 Payout = 0;
+	bool bFirst = false;
+};
+
+struct FPestShotPayload
+{
+	FString PaddockId;
+	int32 Species = 0;  // EPestSpecies as int
+};
+
+struct FInvasiveTreatedPayload
+{
+	FString PaddockId;
+	int32 Species = 0;  // EInvasiveSpecies as int
+	float NewCoverage = 0.0f;
+};
+
+struct FInvasiveSpreadPayload
+{
+	FString FromPaddockId;
+	FString ToPaddockId;
+	int32 Species = 0;
+};
+
 // Later milestones extend this file. Keep it the only place payload shapes are
 // declared — that way the EventBus.h template just refers to types from here.
