@@ -16,10 +16,12 @@
 #include "Systems/WaterSystem.h"
 #include "Systems/EconomySystem.h"
 #include "Systems/MusteringSystem.h"
+#include "Systems/EventSystem.h"
+#include "Systems/BreedingSystem.h"
 
 // Save-schema version. Bumps on any breaking sim shape change. Loading a save
 // with a mismatched version is treated as "no save" (start fresh).
-#define TARA_SIM_SAVE_SCHEMA_VERSION TEXT("tara-save-3d-v4-m4a")
+#define TARA_SIM_SAVE_SCHEMA_VERSION TEXT("tara-save-3d-v5-m5")
 
 // Adjacency between paddocks — paddock id → list of adjacent paddock ids.
 // Phase 0 carries this as explicit state (mirroring the 2D model). Phase 2
@@ -80,6 +82,12 @@ public:
 	const TArray<FRoad>& GetRoads() const { return Roads; }
 	FMusteringSystem& GetMusteringSystem() { return *MusterSys; }
 
+	// M5 accessors.
+	FEventSystem& GetEventSystem() { return *EventSys; }
+	const FEventSystem& GetEventSystem() const { return *EventSys; }
+	FBreedingSystem& GetBreedingSystem() { return *BreedingSys; }
+	const FBreedingSystem& GetBreedingSystem() const { return *BreedingSys; }
+
 	const FPaddock* PaddockById(const FString& Id) const;
 	FPaddock* PaddockById(const FString& Id);
 	const FVehicle* VehicleByType(EVehicleType Type) const;
@@ -117,6 +125,10 @@ public:
 	// Repair a fence to full integrity. Returns false if unknown fence.
 	bool RepairFence(const FString& FenceId);
 
+	// M5 action surface — player chooses how to handle a drought decision.
+	// Choice: "feed" / "agist" / "sell" / "hold".
+	void ResolveBadWeatherDecision(const FString& Choice);
+
 	// Serialisation — JSON snapshot, schema-versioned. See SaveManager pattern
 	// in the 2D project's src/sim/SaveManager.ts.
 	FString SerializeJson() const;
@@ -147,6 +159,8 @@ private:
 	TUniquePtr<FWaterSystem> WaterSys;
 	TUniquePtr<FEconomySystem> EconomySys;
 	TUniquePtr<FMusteringSystem> MusterSys;
+	TUniquePtr<FEventSystem> EventSys;
+	TUniquePtr<FBreedingSystem> BreedingSys;
 	TUniquePtr<FConditionSystem> ConditionSys;
 
 	// Default-seed helper — fills paddocks + herd + bores + adjacency to the

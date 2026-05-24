@@ -150,5 +150,55 @@ struct FHandFiredPayload
 	FString HandId;
 };
 
+// ---- M5 — events + breeding ----
+
+struct FEventStartedPayload
+{
+	int32 Type = 0;            // EStationEventType as int
+	float Severity = 0.0f;
+	int32 DurationDays = 0;
+	FString EventId;
+};
+
+struct FEventResolvedPayload
+{
+	int32 Type = 0;
+	FString EventId;
+	FString Outcome;
+};
+
+struct FBadWeatherDecisionRequiredPayload
+{
+	FString EventId;
+};
+
+struct FBadWeatherDecisionMadePayload
+{
+	FString EventId;
+	FString Choice;   // "feed" / "agist" / "sell" / "hold"
+};
+
+struct FCalendarEventDuePayload
+{
+	FString Type;     // "rodeo" / "draft"
+};
+
+struct FBreedingWindowOpenedPayload
+{
+	int32 CohortBirthYear = -1;
+};
+
+struct FBreedingConceivedPayload
+{
+	int32 CohortBirthYear = -1;
+	int32 PregnantCount = 0;
+};
+
+struct FCalfBornPayload
+{
+	int32 CohortBirthYear = 0;
+	int32 CalfCount = 0;
+};
+
 // Later milestones extend this file. Keep it the only place payload shapes are
 // declared — that way the EventBus.h template just refers to types from here.

@@ -96,5 +96,15 @@ public:
 	TEvent<FHandHiredPayload> HandHired;
 	TEvent<FHandFiredPayload> HandFired;
 
+	// M5 events.
+	TEvent<FEventStartedPayload> EventStarted;
+	TEvent<FEventResolvedPayload> EventResolved;
+	TEvent<FBadWeatherDecisionRequiredPayload> BadWeatherDecisionRequired;
+	TEvent<FBadWeatherDecisionMadePayload> BadWeatherDecisionMade;
+	TEvent<FCalendarEventDuePayload> CalendarEventDue;
+	TEvent<FBreedingWindowOpenedPayload> BreedingWindowOpened;
+	TEvent<FBreedingConceivedPayload> BreedingConceived;
+	TEvent<FCalfBornPayload> CalfBorn;
+
 	// Future milestones extend this list.
 };

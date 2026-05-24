@@ -7,6 +7,8 @@
 #include "Entities/Road.h"
 #include "Entities/Hand.h"
 #include "Systems/MusteringSystem.h"
+#include "Systems/EventSystem.h"
+#include "Systems/BreedingSystem.h"
 
 void UTaraSimSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -124,6 +126,12 @@ bool UTaraSimSubsystem::RepairFence(const FString& FenceId)
 	return Station->RepairFence(FenceId);
 }
 
+void UTaraSimSubsystem::ResolveBadWeatherDecision(const FString& Choice)
+{
+	if (!Station) return;
+	Station->ResolveBadWeatherDecision(Choice);
+}
+
 int32 UTaraSimSubsystem::GetYear() const
 {
 	return Station ? Station->GetClock().Year : 0;
@@ -239,6 +247,37 @@ bool UTaraSimSubsystem::IsHandHired(const FString& HandId) const
 		if (H.Id == HandId) return H.bHired;
 	}
 	return false;
+}
+
+float UTaraSimSubsystem::GetCurrentDroughtSeverity() const
+{
+	return Station ? Station->GetEventSystem().CurrentDroughtSeverity() : 0.0f;
+}
+
+bool UTaraSimSubsystem::IsFlooding() const
+{
+	return Station ? Station->GetEventSystem().IsFlooding() : false;
+}
+
+float UTaraSimSubsystem::GetGrassGrowthMultiplier() const
+{
+	return Station ? Station->GetEventSystem().GrassGrowthMultiplier() : 1.0f;
+}
+
+bool UTaraSimSubsystem::HasPendingBadWeatherDecision() const
+{
+	return Station ? !Station->GetEventSystem().GetPendingBadWeatherDecision().IsEmpty() : false;
+}
+
+int32 UTaraSimSubsystem::GetPregnantHead() const
+{
+	if (!Station) return 0;
+	int32 Total = 0;
+	for (const FPregnantRecord& R : Station->GetBreedingSystem().GetPregnant())
+	{
+		Total += R.Count;
+	}
+	return Total;
 }
 
 void UTaraSimSubsystem::WireSimEventsToDelegates()
@@ -376,6 +415,65 @@ void UTaraSimSubsystem::WireSimEventsToDelegates()
 		OnHandFired.Broadcast(P);
 		UE_LOG(LogTemp, Display, TEXT("[TaraSim] HandFired: %s"), *P.HandId);
 	});
+
+	// M5 — events + breeding.
+	SubIdEventStarted = Bus.EventStarted.Subscribe([this](const FEventStartedPayload& P)
+	{
+		OnEventStarted.Broadcast(P);
+		UE_LOG(LogTemp, Warning, TEXT("[TaraSim] EventStarted: type=%d severity=%.2f duration=%dd id=%s"),
+			P.Type, P.Severity, P.DurationDays, *P.EventId);
+	});
+
+	SubIdEventResolved = Bus.EventResolved.Subscribe([this](const FEventResolvedPayload& P)
+	{
+		OnEventResolved.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] EventResolved: type=%d id=%s outcome=%s"),
+			P.Type, *P.EventId, *P.Outcome);
+	});
+
+	SubIdBadWeatherDecisionRequired = Bus.BadWeatherDecisionRequired.Subscribe(
+		[this](const FBadWeatherDecisionRequiredPayload& P)
+	{
+		OnBadWeatherDecisionRequired.Broadcast(P);
+		UE_LOG(LogTemp, Warning, TEXT("[TaraSim] BadWeatherDecisionRequired: %s"), *P.EventId);
+	});
+
+	SubIdBadWeatherDecisionMade = Bus.BadWeatherDecisionMade.Subscribe(
+		[this](const FBadWeatherDecisionMadePayload& P)
+	{
+		OnBadWeatherDecisionMade.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] BadWeatherDecisionMade: %s -> %s"),
+			*P.EventId, *P.Choice);
+	});
+
+	SubIdCalendarEventDue = Bus.CalendarEventDue.Subscribe([this](const FCalendarEventDuePayload& P)
+	{
+		OnCalendarEventDue.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] CalendarEventDue: %s"), *P.Type);
+	});
+
+	SubIdBreedingWindowOpened = Bus.BreedingWindowOpened.Subscribe(
+		[this](const FBreedingWindowOpenedPayload& P)
+	{
+		OnBreedingWindowOpened.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] BreedingWindowOpened: cohort birthYear %d"),
+			P.CohortBirthYear);
+	});
+
+	SubIdBreedingConceived = Bus.BreedingConceived.Subscribe(
+		[this](const FBreedingConceivedPayload& P)
+	{
+		OnBreedingConceived.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] BreedingConceived: %d head pregnant (dam cohort %d)"),
+			P.PregnantCount, P.CohortBirthYear);
+	});
+
+	SubIdCalfBorn = Bus.CalfBorn.Subscribe([this](const FCalfBornPayload& P)
+	{
+		OnCalfBorn.Broadcast(P);
+		UE_LOG(LogTemp, Display, TEXT("[TaraSim] CalfBorn: %d calves (cohort %d)"),
+			P.CalfCount, P.CohortBirthYear);
+	});
 }
 
 void UTaraSimSubsystem::UnwireSimEvents()
@@ -402,6 +500,14 @@ void UTaraSimSubsystem::UnwireSimEvents()
 	if (SubIdVehiclePurchased != -1){ Bus.VehiclePurchased.Unsubscribe(SubIdVehiclePurchased); SubIdVehiclePurchased = -1; }
 	if (SubIdHandHired != -1)       { Bus.HandHired.Unsubscribe(SubIdHandHired); SubIdHandHired = -1; }
 	if (SubIdHandFired != -1)       { Bus.HandFired.Unsubscribe(SubIdHandFired); SubIdHandFired = -1; }
+	if (SubIdEventStarted != -1)    { Bus.EventStarted.Unsubscribe(SubIdEventStarted); SubIdEventStarted = -1; }
+	if (SubIdEventResolved != -1)   { Bus.EventResolved.Unsubscribe(SubIdEventResolved); SubIdEventResolved = -1; }
+	if (SubIdBadWeatherDecisionRequired != -1) { Bus.BadWeatherDecisionRequired.Unsubscribe(SubIdBadWeatherDecisionRequired); SubIdBadWeatherDecisionRequired = -1; }
+	if (SubIdBadWeatherDecisionMade != -1)     { Bus.BadWeatherDecisionMade.Unsubscribe(SubIdBadWeatherDecisionMade); SubIdBadWeatherDecisionMade = -1; }
+	if (SubIdCalendarEventDue != -1){ Bus.CalendarEventDue.Unsubscribe(SubIdCalendarEventDue); SubIdCalendarEventDue = -1; }
+	if (SubIdBreedingWindowOpened != -1) { Bus.BreedingWindowOpened.Unsubscribe(SubIdBreedingWindowOpened); SubIdBreedingWindowOpened = -1; }
+	if (SubIdBreedingConceived != -1)    { Bus.BreedingConceived.Unsubscribe(SubIdBreedingConceived); SubIdBreedingConceived = -1; }
+	if (SubIdCalfBorn != -1)        { Bus.CalfBorn.Unsubscribe(SubIdCalfBorn); SubIdCalfBorn = -1; }
 }
 
 FString UTaraSimSubsystem::GetSaveFilePath() const
@@ -409,7 +515,7 @@ FString UTaraSimSubsystem::GetSaveFilePath() const
 	// Schema-versioned filename mirrors the 2D project's localStorage key pattern.
 	// Bump on every milestone; mismatched older files discard cleanly via
 	// FStation::FromJson returning nullptr on version mismatch.
-	return FPaths::ProjectSavedDir() / TEXT("tara-save-3d-v4-m4a.json");
+	return FPaths::ProjectSavedDir() / TEXT("tara-save-3d-v5-m5.json");
 }
 
 bool UTaraSimSubsystem::TryLoadFromDisk()

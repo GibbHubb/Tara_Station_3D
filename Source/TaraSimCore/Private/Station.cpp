@@ -12,6 +12,8 @@ FStation::FStation()
 	WaterSys->RecomputeAccess();
 	EconomySys = MakeUnique<FEconomySystem>(Bus, *this);
 	MusterSys = MakeUnique<FMusteringSystem>(*this, Bus);
+	EventSys = MakeUnique<FEventSystem>(*this, Bus);
+	BreedingSys = MakeUnique<FBreedingSystem>(*this, Bus);
 	ConditionSys = MakeUnique<FConditionSystem>(Bus, *this);
 }
 
@@ -101,20 +103,25 @@ void FStation::TickDay()
 
 	Clock.TickDay();
 
+	// Grass simulation reads the event-system's grass-growth multiplier
+	// (drought cuts it ~70% at peak). Compute once per tick.
+	const float GrowthMul = EventSys ? EventSys->GrassGrowthMultiplier() : 1.0f;
 	for (FPaddock& P : Paddocks)
 	{
 		const int32 HerdHere = Herd.HerdInPaddock(P.Id);
-		P.SimulateDay(Clock.GetSeason(), HerdHere, 1.0f);
+		P.SimulateDay(Clock.GetSeason(), HerdHere, GrowthMul);
 	}
 
-	// Order: Water → Economy → Muster → Infrastructure → Condition. Condition
-	// reads water-access cached by Water + active grass-floor lift managed by
-	// Economy. Muster + Infrastructure run between Economy and Condition so
-	// any breakaway/drift completes before Condition reads cohort counts.
+	// Order: Water → Economy → Muster → Infrastructure → Events → Breeding →
+	// Condition. Events runs late so its drought-severity write to Prices is
+	// fresh for Economy's NEXT tick; Breeding before Condition so newly-born
+	// calves can take their first condition drift. Condition always last.
 	WaterSys->TickDay();
 	EconomySys->TickDay(Clock.DayOfYear, Clock.Year);
 	MusterSys->TickDay();
 	TickInfrastructure();
+	EventSys->TickDay();
+	BreedingSys->TickDay();
 	ConditionSys->TickDay();
 	Player.DaysOnStation += 1;
 
@@ -290,6 +297,11 @@ bool FStation::RepairFence(const FString& FenceId)
 	return false;
 }
 
+void FStation::ResolveBadWeatherDecision(const FString& Choice)
+{
+	if (EventSys) EventSys->ResolveBadWeatherDecision(Choice);
+}
+
 void FStation::TickInfrastructure()
 {
 	// Daily decay constants — mirror 2D defaults.
@@ -398,8 +410,11 @@ FString FStation::SerializeJson() const
 	const FString FencesJson = SerializeArray(Fences);
 	const FString RoadsJson = SerializeArray(Roads);
 
+	const FString EventsJson = EventSys ? EventSys->SerializeJson() : TEXT("{}");
+	const FString BreedingJson = BreedingSys ? BreedingSys->SerializeJson() : TEXT("{}");
+
 	return FString::Printf(
-		TEXT("{\"schemaVersion\":\"%s\",\"clock\":%s,\"paddocks\":%s,\"herd\":%s,\"adjacency\":%s,\"bores\":%s,\"player\":%s,\"prices\":%s,\"economy\":%s,\"hands\":%s,\"vehicles\":%s,\"fences\":%s,\"roads\":%s}"),
+		TEXT("{\"schemaVersion\":\"%s\",\"clock\":%s,\"paddocks\":%s,\"herd\":%s,\"adjacency\":%s,\"bores\":%s,\"player\":%s,\"prices\":%s,\"economy\":%s,\"hands\":%s,\"vehicles\":%s,\"fences\":%s,\"roads\":%s,\"events\":%s,\"breeding\":%s}"),
 		TARA_SIM_SAVE_SCHEMA_VERSION,
 		*Clock.SerializeJson(),
 		*PaddocksJson,
@@ -412,7 +427,9 @@ FString FStation::SerializeJson() const
 		*HandsJson,
 		*VehiclesJson,
 		*FencesJson,
-		*RoadsJson);
+		*RoadsJson,
+		*EventsJson,
+		*BreedingJson);
 }
 
 namespace
@@ -647,6 +664,16 @@ TUniquePtr<FStation> FStation::FromJson(const FString& Json)
 	{
 		Station->Roads.Add(FRoad::FromJson(Obj));
 	});
+
+	// M5 — events + breeding sub-objects.
+	{
+		const FString EventsJson = ExtractObject(Json, TEXT("\"events\":"));
+		if (!EventsJson.IsEmpty() && Station->EventSys) Station->EventSys->LoadFromJson(EventsJson);
+	}
+	{
+		const FString BreedingJson = ExtractObject(Json, TEXT("\"breeding\":"));
+		if (!BreedingJson.IsEmpty() && Station->BreedingSys) Station->BreedingSys->LoadFromJson(BreedingJson);
+	}
 
 	// Reset water access cache for the restored topology.
 	if (Station->WaterSys) Station->WaterSys->RecomputeAccess();

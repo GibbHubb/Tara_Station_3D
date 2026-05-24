@@ -36,6 +36,16 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraVehiclePurchased, const FVehiclePurch
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraHandHired, const FHandHiredPayload&);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraHandFired, const FHandFiredPayload&);
 
+// M5 — events + breeding surfaced for HUD modal + paddock visual states.
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraEventStarted, const FEventStartedPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraEventResolved, const FEventResolvedPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraBadWeatherDecisionRequired, const FBadWeatherDecisionRequiredPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraBadWeatherDecisionMade, const FBadWeatherDecisionMadePayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraCalendarEventDue, const FCalendarEventDuePayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraBreedingWindowOpened, const FBreedingWindowOpenedPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraBreedingConceived, const FBreedingConceivedPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraCalfBorn, const FCalfBornPayload&);
+
 /**
  * UTaraSimSubsystem — the bridge between the engine-agnostic FStation (pure C++
  * sim from TaraSimCore) and the UE5 runtime. There is ONE Station per game
@@ -111,6 +121,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Tara")
 	bool RepairFence(const FString& FenceId);
 
+	// M5 — player resolves a pending drought decision modal.
+	// Choice: "feed" / "agist" / "sell" / "hold".
+	UFUNCTION(BlueprintCallable, Category = "Tara")
+	void ResolveBadWeatherDecision(const FString& Choice);
+
 	// Read-only views for Blueprints / Widgets. These mirror common HUD reads
 	// so the UMG layer doesn't need direct access to the C++ Station.
 	UFUNCTION(BlueprintPure, Category = "Tara")
@@ -171,6 +186,22 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Tara")
 	bool IsHandHired(const FString& HandId) const;
 
+	// M5 — drought + flood readouts for the HUD + paddock material.
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	float GetCurrentDroughtSeverity() const;
+
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	bool IsFlooding() const;
+
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	float GetGrassGrowthMultiplier() const;
+
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	bool HasPendingBadWeatherDecision() const;
+
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	int32 GetPregnantHead() const;
+
 	// Direct C++ access for performance-sensitive reads (e.g. per-frame Actor
 	// updates). Blueprints should prefer the UFUNCTION getters above.
 	FStation* GetStationMutable() { return Station.Get(); }
@@ -197,6 +228,14 @@ public:
 	FOnTaraVehiclePurchased OnVehiclePurchased;
 	FOnTaraHandHired OnHandHired;
 	FOnTaraHandFired OnHandFired;
+	FOnTaraEventStarted OnEventStarted;
+	FOnTaraEventResolved OnEventResolved;
+	FOnTaraBadWeatherDecisionRequired OnBadWeatherDecisionRequired;
+	FOnTaraBadWeatherDecisionMade OnBadWeatherDecisionMade;
+	FOnTaraCalendarEventDue OnCalendarEventDue;
+	FOnTaraBreedingWindowOpened OnBreedingWindowOpened;
+	FOnTaraBreedingConceived OnBreedingConceived;
+	FOnTaraCalfBorn OnCalfBorn;
 
 private:
 	TUniquePtr<FStation> Station;
@@ -222,6 +261,14 @@ private:
 	int32 SubIdVehiclePurchased = -1;
 	int32 SubIdHandHired = -1;
 	int32 SubIdHandFired = -1;
+	int32 SubIdEventStarted = -1;
+	int32 SubIdEventResolved = -1;
+	int32 SubIdBadWeatherDecisionRequired = -1;
+	int32 SubIdBadWeatherDecisionMade = -1;
+	int32 SubIdCalendarEventDue = -1;
+	int32 SubIdBreedingWindowOpened = -1;
+	int32 SubIdBreedingConceived = -1;
+	int32 SubIdCalfBorn = -1;
 
 	void WireSimEventsToDelegates();
 	void UnwireSimEvents();
