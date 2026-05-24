@@ -29,6 +29,19 @@ enum class EBehaviourProfile : uint8
 	Wild,
 };
 
+// Pregnancy stage for preg-test grouping — populated by BreedingSystem when
+// pregnancies advance through gestation thirds. Per CORE_LOOP §2: "preg-test
+// the cows, separate by stage of pregnancy, and put similarly-pregnant cows
+// in matched paddocks." Stage tags carry on the cohort so preg-test gate
+// drafting (Phase 5+) can sort the mob.
+enum class EBreederStage : uint8
+{
+	NotPregnant = 0,
+	Early       = 1,   // 0..93 days   (~first trimester equivalent)
+	Mid         = 2,   // 94..187 days (~second)
+	Late        = 3,   // 188..280 days (~third)
+};
+
 struct FCattleCohortConfig
 {
 	int32 BirthYear = 0;
@@ -38,6 +51,8 @@ struct FCattleCohortConfig
 	float ConditionVariance = 10.0f;
 	ECohortState State = ECohortState::Weaner;
 	EBehaviourProfile BehaviourProfile = EBehaviourProfile::Calm;
+	float MusterTrainedness = 0.0f; // 0..100 — see field doc below
+	EBreederStage BreederStage = EBreederStage::NotPregnant;
 };
 
 class TARASIMCORE_API FCattleCohort
@@ -48,8 +63,19 @@ public:
 	static float ClampCondition(float V);
 
 	// 0..1 difficulty score for mustering (drives breakaway risk + extra days
-	// in the 2D MusterSystem; same hooks in 3D's spatial mustering).
+	// in the 2D MusterSystem; same hooks in 3D's spatial mustering). Reflects
+	// behaviour profile only.
 	float DifficultyFactor() const;
+
+	// Combines DifficultyFactor with MusterTrainedness — well-schooled
+	// cohorts (high MusterTrainedness) reduce effective difficulty up to
+	// halve at 100. The 3D spatial mustering AI reads this when picking
+	// flight-zone widths and breakaway probabilities. At Trainedness 0 →
+	// base difficulty unchanged; at 50 (default) → 75% of base; at 100 →
+	// half. The 2D project's computeMuster has no equivalent — this is the
+	// 3D version of "well-trained weaners are easier to muster years later"
+	// per CORE_LOOP §2 + TS-3D-WEANER-SCHOOL design.
+	float EffectiveMusterDifficulty() const;
 
 	FString SerializeJson() const;
 	static FCattleCohort FromJson(const FString& Json);
@@ -63,4 +89,19 @@ public:
 	ECohortState State = ECohortState::Weaner;
 	EBehaviourProfile BehaviourProfile = EBehaviourProfile::Calm;
 	int32 ConsecutiveStarvationDays = 0;
+
+	// Per CORE_LOOP §2 + TS-3D-WEANER-SCHOOL design: well-schooled weaners
+	// muster faster + cleaner years later. This stat rises over in-game days
+	// while a cohort is held as a mob in weaner-school (Phase 5+ sub-scene)
+	// and persists through life. Higher = easier to muster (cohort applies a
+	// reduction to base muster days + breakaway risk when the 3D layer's
+	// spatial AI reads this value). Starts at 0 for freshly-weaned cohorts
+	// + 50 (default) for older cohorts to avoid penalising play before the
+	// weaner-school sub-scene exists.
+	float MusterTrainedness = 50.0f;
+
+	// Pregnancy stage — preg-test sub-scene (TS-3D-PREG-TEST) reads this to
+	// route cows through gates by stage. BreedingSystem advances it as
+	// gestation progresses; resets to NotPregnant after calving.
+	EBreederStage BreederStage = EBreederStage::NotPregnant;
 };

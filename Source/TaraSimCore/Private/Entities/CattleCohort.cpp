@@ -8,6 +8,8 @@ FCattleCohort::FCattleCohort(const FCattleCohortConfig& Config)
 	, ConditionVariance(Config.ConditionVariance)
 	, State(Config.State)
 	, BehaviourProfile(Config.BehaviourProfile)
+	, MusterTrainedness(Config.MusterTrainedness)
+	, BreederStage(Config.BreederStage)
 {
 }
 
@@ -28,12 +30,21 @@ float FCattleCohort::DifficultyFactor() const
 	}
 }
 
+float FCattleCohort::EffectiveMusterDifficulty() const
+{
+	const float Base = DifficultyFactor();
+	const float TrainingNorm = FMath::Clamp(MusterTrainedness, 0.0f, 100.0f) / 100.0f;
+	const float TrainingMul = 1.0f - TrainingNorm * 0.5f;  // 1.0 at T=0 → 0.5 at T=100
+	return Base * TrainingMul;
+}
+
 FString FCattleCohort::SerializeJson() const
 {
 	return FString::Printf(
-		TEXT("{\"birthYear\":%d,\"count\":%d,\"sexRatio\":%.3f,\"conditionMean\":%.2f,\"conditionVariance\":%.2f,\"state\":%d,\"behaviourProfile\":%d,\"consecutiveStarvationDays\":%d}"),
+		TEXT("{\"birthYear\":%d,\"count\":%d,\"sexRatio\":%.3f,\"conditionMean\":%.2f,\"conditionVariance\":%.2f,\"state\":%d,\"behaviourProfile\":%d,\"consecutiveStarvationDays\":%d,\"musterTrainedness\":%.2f,\"breederStage\":%d}"),
 		BirthYear, Count, SexRatio, ConditionMean, ConditionVariance,
-		(int32)State, (int32)BehaviourProfile, ConsecutiveStarvationDays);
+		(int32)State, (int32)BehaviourProfile, ConsecutiveStarvationDays,
+		MusterTrainedness, (int32)BreederStage);
 }
 
 FCattleCohort FCattleCohort::FromJson(const FString& Json)
@@ -81,6 +92,14 @@ FCattleCohort FCattleCohort::FromJson(const FString& Json)
 	Result.BehaviourProfile = (EBehaviourProfile)BehaviourInt;
 
 	ReadInt(TEXT("consecutiveStarvationDays"), Result.ConsecutiveStarvationDays);
+
+	// New fields default to whatever the in-memory struct already has — JSON
+	// keys absent from older saves leave fields at the FCattleCohortConfig
+	// defaults set in the ctor (MusterTrainedness=50, BreederStage=NotPregnant).
+	ReadFloat(TEXT("musterTrainedness"), Result.MusterTrainedness);
+	int32 StageInt = (int32)Result.BreederStage;
+	ReadInt(TEXT("breederStage"), StageInt);
+	Result.BreederStage = (EBreederStage)StageInt;
 
 	return Result;
 }

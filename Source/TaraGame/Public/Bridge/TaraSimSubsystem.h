@@ -308,6 +308,22 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Tara")
 	int32 GetSensorBatteryDays(const FString& SensorId) const;
 
+	// Per-cohort lookups (BirthYear is the cohort key). Used by Phase 5+ sub-
+	// scenes — branding crush, weaner school, preg-test — that need per-cohort
+	// stats.
+	UFUNCTION(BlueprintPure, Category = "Tara|Cohorts")
+	float GetCohortMusterTrainedness(int32 BirthYear) const;
+
+	// Returns 0=NotPregnant / 1=Early / 2=Mid / 3=Late.
+	UFUNCTION(BlueprintPure, Category = "Tara|Cohorts")
+	int32 GetCohortBreederStage(int32 BirthYear) const;
+
+	// Setter is intentionally available — TS-3D-WEANER-SCHOOL sub-scene rises
+	// MusterTrainedness over in-game days while a cohort is held in the
+	// schooling paddock. Clamped 0..100.
+	UFUNCTION(BlueprintCallable, Category = "Tara|Cohorts")
+	void SetCohortMusterTrainedness(int32 BirthYear, float Value);
+
 	// Pacing dials (CORE_LOOP §7 — TUNABLE, do not hard-commit). Settings UI
 	// can mutate via SetSecondsPerInGameDay.
 	UFUNCTION(BlueprintPure, Category = "Tara|Pacing")

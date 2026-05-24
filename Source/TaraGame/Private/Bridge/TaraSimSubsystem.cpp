@@ -442,6 +442,39 @@ int32 UTaraSimSubsystem::GetSensorBatteryDays(const FString& SensorId) const
 	return S ? S->BatteryDays : 0;
 }
 
+float UTaraSimSubsystem::GetCohortMusterTrainedness(int32 BirthYear) const
+{
+	if (!Station) return 0.0f;
+	for (const FCattleCohort& C : Station->GetHerd().Cohorts)
+	{
+		if (C.BirthYear == BirthYear) return C.MusterTrainedness;
+	}
+	return 0.0f;
+}
+
+int32 UTaraSimSubsystem::GetCohortBreederStage(int32 BirthYear) const
+{
+	if (!Station) return 0;
+	for (const FCattleCohort& C : Station->GetHerd().Cohorts)
+	{
+		if (C.BirthYear == BirthYear) return (int32)C.BreederStage;
+	}
+	return 0;
+}
+
+void UTaraSimSubsystem::SetCohortMusterTrainedness(int32 BirthYear, float Value)
+{
+	if (!Station) return;
+	for (FCattleCohort& C : Station->GetHerd().Cohorts)
+	{
+		if (C.BirthYear == BirthYear)
+		{
+			C.MusterTrainedness = FMath::Clamp(Value, 0.0f, 100.0f);
+			return;
+		}
+	}
+}
+
 float UTaraSimSubsystem::GetSecondsPerInGameDay() const
 {
 	return Station ? Station->GetClock().RealSecondsPerInGameDay
