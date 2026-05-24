@@ -26,6 +26,13 @@ void UTaraSimSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		NewGame();
 	}
 
+	// Seed the season-change tracker so the FIRST DayEnded after load doesn't
+	// fire a spurious "Wet → Wet" broadcast. Done after the Station exists.
+	if (Station)
+	{
+		LastSeason = Station->GetClock().GetSeason();
+	}
+
 	WireSimEventsToDelegates();
 
 	UE_LOG(LogTemp, Display, TEXT("[TaraSim] Initialized. Year %d Day %d %s — herd %d head"),
@@ -462,6 +469,24 @@ void UTaraSimSubsystem::WireSimEventsToDelegates()
 	SubIdDayEnded = Bus.DayEnded.Subscribe([this](const FDayEndedPayload& P)
 	{
 		OnDayEnded.Broadcast(P);
+
+		// Synthesise OnSeasonChanged here — see TaraSimSubsystem.h comment
+		// near the FOnTaraSeasonChanged declaration. Cheaper than adding a
+		// real FEventBus event for what is fundamentally a UI concern.
+		if (Station)
+		{
+			const ESeason NewSeason = Station->GetClock().GetSeason();
+			if (NewSeason != LastSeason)
+			{
+				const ESeason From = LastSeason;
+				LastSeason = NewSeason;
+				OnSeasonChanged.Broadcast(From, NewSeason);
+				UE_LOG(LogTemp, Display, TEXT("[TaraSim] SeasonChanged: %s -> %s"),
+					From == ESeason::Wet ? TEXT("Wet") : TEXT("Dry"),
+					NewSeason == ESeason::Wet ? TEXT("Wet") : TEXT("Dry"));
+			}
+		}
+
 		// Autosave on every DayEnded.
 		WriteSaveToDisk();
 	});

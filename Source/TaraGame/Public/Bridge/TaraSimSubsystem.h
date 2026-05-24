@@ -66,6 +66,13 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraSensorBatterySwapped, const FSensorBa
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraFenceRepaired, const FFenceRepairedPayload&);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraRoadGraded, const FRoadGradedPayload&);
 
+// Bridge-synthesised event (NOT in FEventBus) — fires when DayEnded reveals a
+// wet↔dry transition. Synthesised here rather than in the sim because
+// (1) it's a UI-driven concern (shed-action menu re-evaluates) and (2) adding
+// it to FEventBus would require touching TaraSimCore mid-Phase-2; the bridge
+// is the right layer for this. Per TS-3D-TWO-SEASON-MODE plan step 1.
+DECLARE_MULTICAST_DELEGATE_TwoParams(FOnTaraSeasonChanged, ESeason /*From*/, ESeason /*To*/);
+
 /**
  * UTaraSimSubsystem — the bridge between the engine-agnostic FStation (pure C++
  * sim from TaraSimCore) and the UE5 runtime. There is ONE Station per game
@@ -361,7 +368,14 @@ public:
 	FOnTaraFenceRepaired OnFenceRepaired;
 	FOnTaraRoadGraded OnRoadGraded;
 
+	// Bridge-synth (see comment near declaration above).
+	FOnTaraSeasonChanged OnSeasonChanged;
+
 private:
+	// Tracking for the synthesised OnSeasonChanged broadcast. Initialised in
+	// Initialize() and updated inside the OnDayEnded handler.
+	ESeason LastSeason = ESeason::Wet;
+
 	TUniquePtr<FStation> Station;
 
 	// Subscription ids so we can unsubscribe cleanly in Deinitialize.
