@@ -86,5 +86,69 @@ struct FYearEndedPayload
 	int32 Year;
 };
 
+// ---- M4a — mustering, vehicles, fences ----
+
+struct FMusterStartedPayload
+{
+	FString FromPaddockId;
+	FString ToPaddockId;
+	int32 VehicleType = 0;     // EVehicleType as int (avoids cross-include)
+	TArray<FString> HandIds;
+	int32 PlannedDays = 0;
+	int32 FuelCost = 0;
+	int32 BreakawayPending = 0;
+};
+
+struct FMusterCompletedPayload
+{
+	FString ToPaddockId;
+	int32 VehicleType = 0;
+	TArray<FString> HandIds;
+	int32 BreakawayHead = 0;   // actual breakaway head removed from cohorts
+};
+
+struct FMusterCancelledPayload
+{
+	FString ToPaddockId;
+	int32 DaysSpent = 0;
+	int32 Refund = 0;          // $ fuel-refund applied to player cash
+};
+
+struct FBreakawayPayload
+{
+	int32 Count = 0;
+	FString PaddockId;         // paddock at the moment of breakaway (typically destination)
+};
+
+struct FFenceBrokenPayload
+{
+	FString FenceId;
+	FString PaddockA;
+	FString PaddockB;
+};
+
+struct FCattleDriftedPayload
+{
+	FString FromPaddockId;
+	FString ToPaddockId;
+	int32 Count = 0;
+};
+
+struct FVehiclePurchasedPayload
+{
+	int32 VehicleType = 0;
+	int32 Cost = 0;
+};
+
+struct FHandHiredPayload
+{
+	FString HandId;
+};
+
+struct FHandFiredPayload
+{
+	FString HandId;
+};
+
 // Later milestones extend this file. Keep it the only place payload shapes are
 // declared — that way the EventBus.h template just refers to types from here.

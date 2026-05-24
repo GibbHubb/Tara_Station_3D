@@ -85,5 +85,16 @@ public:
 	TEvent<FSupplementOrderedPayload> SupplementOrdered;
 	TEvent<FYearEndedPayload> YearEnded;
 
+	// M4a events.
+	TEvent<FMusterStartedPayload> MusterStarted;
+	TEvent<FMusterCompletedPayload> MusterCompleted;
+	TEvent<FMusterCancelledPayload> MusterCancelled;
+	TEvent<FBreakawayPayload> Breakaway;
+	TEvent<FFenceBrokenPayload> FenceBroken;
+	TEvent<FCattleDriftedPayload> CattleDrifted;
+	TEvent<FVehiclePurchasedPayload> VehiclePurchased;
+	TEvent<FHandHiredPayload> HandHired;
+	TEvent<FHandFiredPayload> HandFired;
+
 	// Future milestones extend this list.
 };

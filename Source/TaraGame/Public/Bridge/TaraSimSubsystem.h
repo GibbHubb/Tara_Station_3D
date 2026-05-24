@@ -25,6 +25,17 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraCattleSold, const FCattleSoldPayload&
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraSupplementOrdered, const FSupplementOrderedPayload&);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraYearEnded, const FYearEndedPayload&);
 
+// M4a — muster + infrastructure events surfaced for HUD + paddock/fence actors.
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraMusterStarted, const FMusterStartedPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraMusterCompleted, const FMusterCompletedPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraMusterCancelled, const FMusterCancelledPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraBreakaway, const FBreakawayPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraFenceBroken, const FFenceBrokenPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraCattleDrifted, const FCattleDriftedPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraVehiclePurchased, const FVehiclePurchasedPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraHandHired, const FHandHiredPayload&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnTaraHandFired, const FHandFiredPayload&);
+
 /**
  * UTaraSimSubsystem — the bridge between the engine-agnostic FStation (pure C++
  * sim from TaraSimCore) and the UE5 runtime. There is ONE Station per game
@@ -71,6 +82,35 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Tara")
 	int32 SellCattle(int32 Count);
 
+	// M4a — muster + infrastructure actions.
+	// VehicleType: 0=Foot, 1=Horse, 2=TwoWheeler, 3=FourWheeler, 4=Buggy, 5=Chopper.
+	// PlannedDays / FuelCost / BreakawayPending are decided by the 3D layer
+	// (spatial gameplay computes them); the sim runs the clock + applies them
+	// at completion.
+	UFUNCTION(BlueprintCallable, Category = "Tara")
+	bool StartMuster(
+		const FString& ToPaddockId,
+		int32 VehicleType,
+		const TArray<FString>& HandIds,
+		int32 PlannedDays,
+		int32 FuelCost,
+		int32 BreakawayPending);
+
+	UFUNCTION(BlueprintCallable, Category = "Tara")
+	bool CancelMuster();
+
+	UFUNCTION(BlueprintCallable, Category = "Tara")
+	bool BuyVehicle(int32 VehicleType);
+
+	UFUNCTION(BlueprintCallable, Category = "Tara")
+	bool HireHand(const FString& HandId);
+
+	UFUNCTION(BlueprintCallable, Category = "Tara")
+	bool FireHand(const FString& HandId);
+
+	UFUNCTION(BlueprintCallable, Category = "Tara")
+	bool RepairFence(const FString& FenceId);
+
 	// Read-only views for Blueprints / Widgets. These mirror common HUD reads
 	// so the UMG layer doesn't need direct access to the C++ Station.
 	UFUNCTION(BlueprintPure, Category = "Tara")
@@ -106,6 +146,31 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Tara")
 	int32 GetCurrentCattlePrice() const;
 
+	// M4a readouts.
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	bool IsHerdInTransit() const;
+
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	int32 GetMusterDaysRemaining() const;
+
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	FString GetMusterDestinationPaddock() const;
+
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	bool IsVehicleOwned(int32 VehicleType) const;
+
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	float GetVehicleCondition(int32 VehicleType) const;
+
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	float GetFenceIntegrity(const FString& FenceId) const;
+
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	float GetRoadGradeQuality(const FString& RoadId) const;
+
+	UFUNCTION(BlueprintPure, Category = "Tara")
+	bool IsHandHired(const FString& HandId) const;
+
 	// Direct C++ access for performance-sensitive reads (e.g. per-frame Actor
 	// updates). Blueprints should prefer the UFUNCTION getters above.
 	FStation* GetStationMutable() { return Station.Get(); }
@@ -123,6 +188,15 @@ public:
 	FOnTaraCattleSold OnCattleSold;
 	FOnTaraSupplementOrdered OnSupplementOrdered;
 	FOnTaraYearEnded OnYearEnded;
+	FOnTaraMusterStarted OnMusterStarted;
+	FOnTaraMusterCompleted OnMusterCompleted;
+	FOnTaraMusterCancelled OnMusterCancelled;
+	FOnTaraBreakaway OnBreakaway;
+	FOnTaraFenceBroken OnFenceBroken;
+	FOnTaraCattleDrifted OnCattleDrifted;
+	FOnTaraVehiclePurchased OnVehiclePurchased;
+	FOnTaraHandHired OnHandHired;
+	FOnTaraHandFired OnHandFired;
 
 private:
 	TUniquePtr<FStation> Station;
@@ -139,6 +213,15 @@ private:
 	int32 SubIdCattleSold = -1;
 	int32 SubIdSupplementOrdered = -1;
 	int32 SubIdYearEnded = -1;
+	int32 SubIdMusterStarted = -1;
+	int32 SubIdMusterCompleted = -1;
+	int32 SubIdMusterCancelled = -1;
+	int32 SubIdBreakaway = -1;
+	int32 SubIdFenceBroken = -1;
+	int32 SubIdCattleDrifted = -1;
+	int32 SubIdVehiclePurchased = -1;
+	int32 SubIdHandHired = -1;
+	int32 SubIdHandFired = -1;
 
 	void WireSimEventsToDelegates();
 	void UnwireSimEvents();

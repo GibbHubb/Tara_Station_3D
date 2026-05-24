@@ -6,9 +6,12 @@ FStation::FStation()
 
 	// Systems — construct in dependency order. Water + Economy FIRST so
 	// Condition can read water access + active supplements on its tick.
+	// Muster comes AFTER Economy because cancel-refund hits cash via
+	// EconomySystem.AddCash; Condition still last.
 	WaterSys = MakeUnique<FWaterSystem>(Bus, *this);
 	WaterSys->RecomputeAccess();
 	EconomySys = MakeUnique<FEconomySystem>(Bus, *this);
+	MusterSys = MakeUnique<FMusteringSystem>(*this, Bus);
 	ConditionSys = MakeUnique<FConditionSystem>(Bus, *this);
 }
 
@@ -62,6 +65,29 @@ void FStation::SeedDefaults()
 	Bore2Cfg.ServesPaddockIds.Add(TEXT("C"));
 	Bore2Cfg.Condition = 82.0f;
 	Bores.Add(FBore(Bore2Cfg));
+
+	// M4a seed — the 6 vehicle types (foot + horse always owned; the rest
+	// purchasable). 0 hired hands to start (the ringer works alone). Two
+	// roads + two fences linking the A↔B↔C adjacency chain.
+	for (EVehicleType T : FVehicle::AllTypes())
+	{
+		Vehicles.Add(FVehicle(T));
+	}
+
+	// Hands roster — three potential hires available at $80/day. The 2D
+	// project's default seed mirrors this; player hires from the homestead.
+	Hands.Add(FHand({ TEXT("hand-1"), TEXT("Wazza"), 60, 80, false }));
+	Hands.Add(FHand({ TEXT("hand-2"), TEXT("Bek"),   70, 95, false }));
+	Hands.Add(FHand({ TEXT("hand-3"), TEXT("Macca"), 45, 70, false }));
+
+	// Roads on each adjacency edge.
+	Roads.Add(FRoad({ TEXT("road-AB"), TEXT("A"), TEXT("B"), 60.0f }));
+	Roads.Add(FRoad({ TEXT("road-BC"), TEXT("B"), TEXT("C"), 55.0f }));
+
+	// Fences on each adjacency edge — start at 75 integrity so decay puts
+	// the player into "needs fixing" within a year of in-game time.
+	Fences.Add(FFence({ TEXT("fence-AB"), TEXT("A"), TEXT("B"), 75.0f }));
+	Fences.Add(FFence({ TEXT("fence-BC"), TEXT("B"), TEXT("C"), 75.0f }));
 }
 
 void FStation::TickDay()
@@ -81,10 +107,14 @@ void FStation::TickDay()
 		P.SimulateDay(Clock.GetSeason(), HerdHere, 1.0f);
 	}
 
-	// Order: Water → Economy → Condition. Condition reads water-access cached
-	// by Water and active grass-floor lift managed by Economy.
+	// Order: Water → Economy → Muster → Infrastructure → Condition. Condition
+	// reads water-access cached by Water + active grass-floor lift managed by
+	// Economy. Muster + Infrastructure run between Economy and Condition so
+	// any breakaway/drift completes before Condition reads cohort counts.
 	WaterSys->TickDay();
 	EconomySys->TickDay(Clock.DayOfYear, Clock.Year);
+	MusterSys->TickDay();
+	TickInfrastructure();
 	ConditionSys->TickDay();
 	Player.DaysOnStation += 1;
 
@@ -128,6 +158,192 @@ FStation::FCheckBoreResult FStation::CheckBore(const FString& BoreId)
 	return Out;
 }
 
+const FVehicle* FStation::VehicleByType(EVehicleType Type) const
+{
+	for (const FVehicle& V : Vehicles)
+	{
+		if (V.Type == Type) return &V;
+	}
+	return nullptr;
+}
+
+FVehicle* FStation::VehicleByType(EVehicleType Type)
+{
+	for (FVehicle& V : Vehicles)
+	{
+		if (V.Type == Type) return &V;
+	}
+	return nullptr;
+}
+
+const FFence* FStation::FenceBetween(const FString& A, const FString& B) const
+{
+	for (const FFence& F : Fences)
+	{
+		if (F.Connects(A, B)) return &F;
+	}
+	return nullptr;
+}
+
+const FRoad* FStation::RoadBetween(const FString& A, const FString& B) const
+{
+	for (const FRoad& R : Roads)
+	{
+		if (R.Connects(A, B)) return &R;
+	}
+	return nullptr;
+}
+
+bool FStation::StartMuster(
+	const FString& ToPaddockId,
+	EVehicleType VehicleType,
+	const TArray<FString>& HandIds,
+	int32 PlannedDays,
+	int32 FuelCost,
+	int32 BreakawayPending)
+{
+	if (!Herd.StartMuster(ToPaddockId, PlannedDays, (int32)VehicleType, HandIds, FuelCost, BreakawayPending))
+	{
+		return false;
+	}
+
+	// Debit fuel cost up-front (refunded on cancel via MusteringSystem).
+	if (FuelCost > 0)
+	{
+		EconomySys->AddCash(-FuelCost, TEXT("muster fuel"));
+	}
+
+	FMusterStartedPayload Payload;
+	Payload.FromPaddockId = Herd.CurrentPaddockId;
+	Payload.ToPaddockId = ToPaddockId;
+	Payload.VehicleType = (int32)VehicleType;
+	Payload.HandIds = HandIds;
+	Payload.PlannedDays = PlannedDays;
+	Payload.FuelCost = FuelCost;
+	Payload.BreakawayPending = BreakawayPending;
+	Bus.MusterStarted.Emit(Payload);
+	return true;
+}
+
+bool FStation::BuyVehicle(EVehicleType Type)
+{
+	FVehicle* V = VehicleByType(Type);
+	if (!V) return false;
+	if (V->bOwned) return false;
+
+	const int32 Cost = V->Stats.PurchasePrice;
+	if (Cost <= 0) { V->bOwned = true; return true; }
+	if (Player.Cash < Cost) return false;
+
+	EconomySys->AddCash(-Cost, TEXT("vehicle purchase"));
+	V->bOwned = true;
+
+	FVehiclePurchasedPayload Payload;
+	Payload.VehicleType = (int32)Type;
+	Payload.Cost = Cost;
+	Bus.VehiclePurchased.Emit(Payload);
+	return true;
+}
+
+bool FStation::HireHand(const FString& HandId)
+{
+	for (FHand& H : Hands)
+	{
+		if (H.Id == HandId)
+		{
+			if (H.bHired) return false;
+			H.bHired = true;
+			FHandHiredPayload P; P.HandId = HandId;
+			Bus.HandHired.Emit(P);
+			return true;
+		}
+	}
+	return false;
+}
+
+bool FStation::FireHand(const FString& HandId)
+{
+	for (FHand& H : Hands)
+	{
+		if (H.Id == HandId)
+		{
+			if (!H.bHired) return false;
+			H.bHired = false;
+			FHandFiredPayload P; P.HandId = HandId;
+			Bus.HandFired.Emit(P);
+			return true;
+		}
+	}
+	return false;
+}
+
+bool FStation::RepairFence(const FString& FenceId)
+{
+	for (FFence& F : Fences)
+	{
+		if (F.Id == FenceId)
+		{
+			F.Integrity = 100.0f;
+			return true;
+		}
+	}
+	return false;
+}
+
+void FStation::TickInfrastructure()
+{
+	// Daily decay constants — mirror 2D defaults.
+	const float FenceDecayPerDay = 0.10f;   // ~1% over 10 days
+	const float RoadDecayPerDay = 0.05f;    // slower; graders restore in M8
+
+	// Decay all fences; emit FenceBroken if integrity hits 0 this tick.
+	for (FFence& F : Fences)
+	{
+		const float Prev = F.Integrity;
+		F.Integrity = FFence::ClampIntegrity(F.Integrity - FenceDecayPerDay);
+		if (Prev > 0.0f && F.Integrity <= 0.0f)
+		{
+			FFenceBrokenPayload P;
+			P.FenceId = F.Id;
+			P.PaddockA = F.PaddockA;
+			P.PaddockB = F.PaddockB;
+			Bus.FenceBroken.Emit(P);
+		}
+	}
+
+	// Decay all roads (no event — quality is read at muster-plan time).
+	for (FRoad& R : Roads)
+	{
+		R.GradeQuality = FRoad::ClampGrade(R.GradeQuality - RoadDecayPerDay);
+	}
+
+	// Broken-fence drift: if the herd's paddock has any fence at <=0 integrity
+	// AND the herd is NOT in transit, a small number of head drift to the
+	// adjacent paddock. Mirrors 2D Fence.ts drift behaviour.
+	if (Herd.IsInTransit()) return;
+
+	const FString HerdPaddock = Herd.CurrentPaddockId;
+	for (const FFence& F : Fences)
+	{
+		if (F.Integrity > 0.0f) continue;
+		if (F.PaddockA != HerdPaddock && F.PaddockB != HerdPaddock) continue;
+		const FString OtherPaddock = (F.PaddockA == HerdPaddock) ? F.PaddockB : F.PaddockA;
+
+		// Drift count scales with herd size; cap at 5 head/day per broken fence.
+		const int32 DriftCount = FMath::Clamp(Herd.GetSize() / 20, 1, 5);
+		const int32 Drifted = Herd.ApplyBreakaway(DriftCount);
+		if (Drifted > 0)
+		{
+			FCattleDriftedPayload P;
+			P.FromPaddockId = HerdPaddock;
+			P.ToPaddockId = OtherPaddock;
+			P.Count = Drifted;
+			Bus.CattleDrifted.Emit(P);
+		}
+		break;  // one drift event per tick is plenty
+	}
+}
+
 FString FStation::SerializeJson() const
 {
 	FString PaddocksJson = TEXT("[");
@@ -163,8 +379,27 @@ FString FStation::SerializeJson() const
 	}
 	AdjJson += TEXT("}");
 
+	// M4a — hands, vehicles, fences, roads arrays.
+	auto SerializeArray = [](auto& Container) -> FString
+	{
+		FString S = TEXT("[");
+		bool bFirst = true;
+		for (const auto& Item : Container)
+		{
+			if (!bFirst) S += TEXT(",");
+			bFirst = false;
+			S += Item.SerializeJson();
+		}
+		S += TEXT("]");
+		return S;
+	};
+	const FString HandsJson = SerializeArray(Hands);
+	const FString VehiclesJson = SerializeArray(Vehicles);
+	const FString FencesJson = SerializeArray(Fences);
+	const FString RoadsJson = SerializeArray(Roads);
+
 	return FString::Printf(
-		TEXT("{\"schemaVersion\":\"%s\",\"clock\":%s,\"paddocks\":%s,\"herd\":%s,\"adjacency\":%s,\"bores\":%s,\"player\":%s,\"prices\":%s,\"economy\":%s}"),
+		TEXT("{\"schemaVersion\":\"%s\",\"clock\":%s,\"paddocks\":%s,\"herd\":%s,\"adjacency\":%s,\"bores\":%s,\"player\":%s,\"prices\":%s,\"economy\":%s,\"hands\":%s,\"vehicles\":%s,\"fences\":%s,\"roads\":%s}"),
 		TARA_SIM_SAVE_SCHEMA_VERSION,
 		*Clock.SerializeJson(),
 		*PaddocksJson,
@@ -173,7 +408,11 @@ FString FStation::SerializeJson() const
 		*BoresJson,
 		*Player.SerializeJson(),
 		*Prices.SerializeJson(),
-		*EconomySys->SerializeJson());
+		*EconomySys->SerializeJson(),
+		*HandsJson,
+		*VehiclesJson,
+		*FencesJson,
+		*RoadsJson);
 }
 
 namespace
@@ -352,6 +591,62 @@ TUniquePtr<FStation> FStation::FromJson(const FString& Json)
 		const FString EconJson = ExtractObject(Json, TEXT("\"economy\":"));
 		if (!EconJson.IsEmpty() && Station->EconomySys) Station->EconomySys->LoadFromJson(EconJson);
 	}
+
+	// M4a — hands, vehicles, fences, roads arrays.
+	// Generic object-array extractor mirroring the paddocks/bores loops above.
+	auto ParseObjectArray = [&Json](const FString& ArrayToken, auto OnObject)
+	{
+		const int32 ArrIdx = Json.Find(ArrayToken);
+		if (ArrIdx == INDEX_NONE) return;
+		int32 Depth = 0;
+		int32 ObjStart = INDEX_NONE;
+		for (int32 P = ArrIdx + ArrayToken.Len(); P < Json.Len(); P++)
+		{
+			const TCHAR Ch = Json[P];
+			if (Ch == '{')
+			{
+				if (Depth == 0) ObjStart = P;
+				Depth++;
+			}
+			else if (Ch == '}')
+			{
+				Depth--;
+				if (Depth == 0 && ObjStart != INDEX_NONE)
+				{
+					OnObject(Json.Mid(ObjStart, P - ObjStart + 1));
+					ObjStart = INDEX_NONE;
+				}
+			}
+			else if (Ch == ']' && Depth == 0)
+			{
+				break;
+			}
+		}
+	};
+
+	Station->Hands.Empty();
+	ParseObjectArray(TEXT("\"hands\":["), [&](const FString& Obj)
+	{
+		Station->Hands.Add(FHand::FromJson(Obj));
+	});
+
+	Station->Vehicles.Empty();
+	ParseObjectArray(TEXT("\"vehicles\":["), [&](const FString& Obj)
+	{
+		Station->Vehicles.Add(FVehicle::FromJson(Obj));
+	});
+
+	Station->Fences.Empty();
+	ParseObjectArray(TEXT("\"fences\":["), [&](const FString& Obj)
+	{
+		Station->Fences.Add(FFence::FromJson(Obj));
+	});
+
+	Station->Roads.Empty();
+	ParseObjectArray(TEXT("\"roads\":["), [&](const FString& Obj)
+	{
+		Station->Roads.Add(FRoad::FromJson(Obj));
+	});
 
 	// Reset water access cache for the restored topology.
 	if (Station->WaterSys) Station->WaterSys->RecomputeAccess();
