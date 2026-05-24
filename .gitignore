@@ -1,0 +1,43 @@
+# Visual Studio + Rider
+.vs/
+.vscode/
+.idea/
+*.suo
+*.sln
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+*.opendb
+*.user
+*.userosscache
+*.sln.docstates
+*.suo.user
+
+# UE5 generated
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+*.uplugin.bak
+*.uproject.bak
+
+# Build artefacts
+*.obj
+*.pdb
+*.idb
+*.exe
+*.lib
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Content backups / autosaves (keep Content/ itself tracked)
+Content/**/*.uasset.bak
+Content/AutoSaves/
+
+# Personal notes
+*.swp
+*.bak
+*.tmp

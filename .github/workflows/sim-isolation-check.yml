@@ -1,0 +1,37 @@
+name: Sim-isolation invariant
+
+# Mirrors the 2D project's "grep -r 'import.*phaser' src/sim/" check.
+# Verifies that no file under Source/TaraSimCore/ pulls in Engine, CoreUObject,
+# GameFramework, UMG, or Slate headers — the build system also enforces this
+# via TaraSimCore.Build.cs declaring only `Core` as a dependency, but a grep
+# in CI gives early failure with a clear message.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify sim layer has no engine imports
+        run: |
+          if grep -rE '#include\s*"(Engine|CoreUObject|GameFramework|UMG|Slate)/' Source/TaraSimCore/; then
+            echo ""
+            echo "❌ TaraSimCore is supposed to be engine-agnostic. Found engine-layer #includes above."
+            echo "   The sim's only allowed dependency is Core (see TaraSimCore.Build.cs)."
+            exit 1
+          fi
+          echo "✓ TaraSimCore is engine-clean."
+
+      - name: Verify TaraSimCore.Build.cs declares only Core
+        run: |
+          if grep -qE '"(CoreUObject|Engine|GameFramework|UMG|Slate)"' Source/TaraSimCore/TaraSimCore.Build.cs; then
+            echo "❌ TaraSimCore.Build.cs lists an engine module as a dependency."
+            exit 1
+          fi
+          echo "✓ TaraSimCore.Build.cs declares only Core."
