@@ -1,0 +1,21 @@
+---,OrderId,Body,MinDayOfYear,MaxDayOfYear,Tag
+check-south-fence,check-south-fence,"Go and have a look at the south fence — saw cattle drift across it yesterday.",1,365,fencing
+check-bores,check-bores,"Bores haven't been topped. Take the run before lunch.",1,365,water
+muster-pats-east,muster-pats-east,"Need you to push the mob out of Pat's East and back toward the river.",60,334,mustering
+fix-pump-windmill,fix-pump-windmill,"Pump on the Wallace Road bore was clicking. Have a look.",1,365,machinery
+weaner-check,weaner-check,"Check on the weaners — heard a few coughing.",60,334,cattle
+grade-back-track,grade-back-track,"Track out to Limestone's getting rutted. Grader's in the shed.",60,334,roads
+calf-adrift,calf-adrift,"There's a calf adrift in Telephone North — see if you can get it back to mum.",90,250,cattle
+salt-lick-supply,salt-lick-supply,"Salt licks in the home paddock need topping up.",60,334,supplements
+fence-back-east,fence-back-east,"Run the eastern boundary fence before knock-off — feral pigs got through last week.",1,365,fencing
+trough-check,trough-check,"Trough at Pearcer's was nearly empty. Top it.",60,334,water
+horse-yard-gate,horse-yard-gate,"The horse-yard gate latch is busted. Spare's on the workbench.",1,365,fencing
+mob-count-mid,mob-count-mid,"Want a head count on the Mid II mob when you get a chance.",60,334,cattle
+spotting-dogs,spotting-dogs,"Neighbour reckons there's dogs working the Bull paddock. Take the rifle.",60,334,pest
+wet-prep-tanks,wet-prep-tanks,"Get the rainwater tanks scrubbed before the wet — couple of weeks off.",240,300,water
+wet-prep-poly-pipe,wet-prep-poly-pipe,"Lay a length of poly pipe to the new trough before the rain hits.",240,300,water
+fix-quad-rack,fix-quad-rack,"The quad rack in the shed is loose. Sort it.",1,365,machinery
+school-weaners,school-weaners,"Hold the weaners in Holding paddock corner today — get 'em used to pressure.",90,250,cattle
+spray-parkinsonia,spray-parkinsonia,"Parkinsonia's spreading in the Back. Take the spray pack.",60,334,invasive
+shift-mob-shade,shift-mob-shade,"Mob's standing in the sun in Sandridge South — push them under the gums.",1,365,cattle
+homestead-water,homestead-water,"House tank's getting low. Check the pump on the way past.",1,365,water

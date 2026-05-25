@@ -518,6 +518,136 @@ void UTaraSimSubsystem::RunSmokeTest(int32 Days)
 	FSimSmokeTest::LogResult(Result);
 }
 
+TArray<int32> UTaraSimSubsystem::GetOwnedVehicleTypes() const
+{
+	TArray<int32> Out;
+	if (!Station) return Out;
+	for (const FVehicle& V : Station->GetVehicles())
+	{
+		if (V.bOwned) Out.Add((int32)V.Type);
+	}
+	return Out;
+}
+
+TArray<int32> UTaraSimSubsystem::GetOwnedWorkMachineTypes() const
+{
+	TArray<int32> Out;
+	if (!Station) return Out;
+	for (const FWorkMachine& M : Station->GetWorkMachines())
+	{
+		if (M.bOwned) Out.Add((int32)M.Type);
+	}
+	return Out;
+}
+
+TArray<FString> UTaraSimSubsystem::GetHiredHandIds() const
+{
+	TArray<FString> Out;
+	if (!Station) return Out;
+	for (const FHand& H : Station->GetHands())
+	{
+		if (H.bHired) Out.Add(H.Id);
+	}
+	return Out;
+}
+
+TArray<FString> UTaraSimSubsystem::GetAllHandIds() const
+{
+	TArray<FString> Out;
+	if (!Station) return Out;
+	for (const FHand& H : Station->GetHands())
+	{
+		Out.Add(H.Id);
+	}
+	return Out;
+}
+
+TArray<FString> UTaraSimSubsystem::GetAllPaddockIds() const
+{
+	TArray<FString> Out;
+	if (!Station) return Out;
+	for (const FPaddock& P : Station->GetPaddocks())
+	{
+		Out.Add(P.Id);
+	}
+	return Out;
+}
+
+TArray<int32> UTaraSimSubsystem::GetAllCohortBirthYears() const
+{
+	TArray<int32> Out;
+	if (!Station) return Out;
+	for (const FCattleCohort& C : Station->GetHerd().Cohorts)
+	{
+		Out.Add(C.BirthYear);
+	}
+	return Out;
+}
+
+int32 UTaraSimSubsystem::GetCohortHeadCount(int32 BirthYear) const
+{
+	if (!Station) return 0;
+	for (const FCattleCohort& C : Station->GetHerd().Cohorts)
+	{
+		if (C.BirthYear == BirthYear) return C.Count;
+	}
+	return 0;
+}
+
+int32 UTaraSimSubsystem::GetCohortState(int32 BirthYear) const
+{
+	if (!Station) return 0;
+	for (const FCattleCohort& C : Station->GetHerd().Cohorts)
+	{
+		if (C.BirthYear == BirthYear) return (int32)C.State;
+	}
+	return 0;
+}
+
+TArray<FString> UTaraSimSubsystem::GetInstalledSensorIds() const
+{
+	TArray<FString> Out;
+	if (!Station) return Out;
+	for (const FSensor& S : Station->GetSensorSystem().GetSensors())
+	{
+		if (S.bInstalled) Out.Add(S.Id);
+	}
+	return Out;
+}
+
+TArray<FString> UTaraSimSubsystem::GetAllFenceIds() const
+{
+	TArray<FString> Out;
+	if (!Station) return Out;
+	for (const FFence& F : Station->GetFences())
+	{
+		Out.Add(F.Id);
+	}
+	return Out;
+}
+
+TArray<FString> UTaraSimSubsystem::GetAllRoadIds() const
+{
+	TArray<FString> Out;
+	if (!Station) return Out;
+	for (const FRoad& R : Station->GetRoads())
+	{
+		Out.Add(R.Id);
+	}
+	return Out;
+}
+
+TArray<FString> UTaraSimSubsystem::GetAllBoreIds() const
+{
+	TArray<FString> Out;
+	if (!Station) return Out;
+	for (const FBore& B : Station->GetBores())
+	{
+		Out.Add(B.Id);
+	}
+	return Out;
+}
+
 bool UTaraSimSubsystem::RecordBrandingDay(int32 CohortBirthYear, int32 HeadProcessed, bool bDehorned)
 {
 	if (!Station) return false;

@@ -357,6 +357,62 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Tara|Diagnostics")
 	void RunSmokeTest(int32 Days);
 
+	// ---- Enumeration getters (Phase 2/5+ widget helpers) ----
+	// These let UMG widgets render lists without walking the sim layer directly.
+
+	// All vehicle types owned right now. Returns ints (EVehicleType as int);
+	// caller converts to label via the standard 0..5 mapping (Foot/Horse/2W/4W/Buggy/Chopper).
+	UFUNCTION(BlueprintPure, Category = "Tara|Vehicles")
+	TArray<int32> GetOwnedVehicleTypes() const;
+
+	// All work-machine types owned right now (int values map to EWorkMachineType
+	// 0=Tractor..6=MolassesTruck).
+	UFUNCTION(BlueprintPure, Category = "Tara|Vehicles")
+	TArray<int32> GetOwnedWorkMachineTypes() const;
+
+	// All hired hand ids — typical use: shed-hire/fire widget builds a list,
+	// per-hand status via IsHandHired.
+	UFUNCTION(BlueprintPure, Category = "Tara|Hands")
+	TArray<FString> GetHiredHandIds() const;
+
+	UFUNCTION(BlueprintPure, Category = "Tara|Hands")
+	TArray<FString> GetAllHandIds() const;
+
+	// All paddock ids — typical use: muster-destination dropdowns,
+	// preg-test paddock-per-stage assignment widgets.
+	UFUNCTION(BlueprintPure, Category = "Tara|Paddocks")
+	TArray<FString> GetAllPaddockIds() const;
+
+	// All cohort birth years currently in the herd — typical use: drafting
+	// widget cohort dropdown, preg-test grouping, weaner-school cohort picker.
+	UFUNCTION(BlueprintPure, Category = "Tara|Cohorts")
+	TArray<int32> GetAllCohortBirthYears() const;
+
+	// Cohort head count + state — useful for the "select cohort to wean/brand/preg-test"
+	// widget. Returns 0 / Unknown if cohort not found.
+	UFUNCTION(BlueprintPure, Category = "Tara|Cohorts")
+	int32 GetCohortHeadCount(int32 BirthYear) const;
+
+	// Returns ECohortState as int: 0=Unweaned, 1=Weaner, 2=Steer, 3=Heifer, 4=Breeder, 5=Old.
+	UFUNCTION(BlueprintPure, Category = "Tara|Cohorts")
+	int32 GetCohortState(int32 BirthYear) const;
+
+	// All sensor ids currently installed — sensor-dashboard widget needs this.
+	UFUNCTION(BlueprintPure, Category = "Tara|Sensors")
+	TArray<FString> GetInstalledSensorIds() const;
+
+	// All fence ids that exist in the sim — fence-repair widget needs this.
+	UFUNCTION(BlueprintPure, Category = "Tara|Infrastructure")
+	TArray<FString> GetAllFenceIds() const;
+
+	// All road ids — grade-road widget needs this.
+	UFUNCTION(BlueprintPure, Category = "Tara|Infrastructure")
+	TArray<FString> GetAllRoadIds() const;
+
+	// All bore ids — bore-run widget needs this.
+	UFUNCTION(BlueprintPure, Category = "Tara|Infrastructure")
+	TArray<FString> GetAllBoreIds() const;
+
 	// Pacing dials (CORE_LOOP §7 — TUNABLE, do not hard-commit). Settings UI
 	// can mutate via SetSecondsPerInGameDay.
 	UFUNCTION(BlueprintPure, Category = "Tara|Pacing")
