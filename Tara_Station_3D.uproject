@@ -1,8 +1,8 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "5.3",
+	"EngineAssociation": "5.7",
 	"Category": "",
-	"Description": "Tara Station — Outback Life. 3D cattle-station life-sim. See 2D repo (GibbHubb/Tara_Station) for the design reference; this is the UE5 rebuild per 3D_PROJECT_BRIEF.md.",
+	"Description": "Tara Station - Outback Life. 3D cattle-station life-sim. See 2D repo (GibbHubb/Tara_Station) for the design reference; this is the UE5 rebuild per 3D_PROJECT_BRIEF.md.",
 	"Modules": [
 		{
 			"Name": "TaraGame",
