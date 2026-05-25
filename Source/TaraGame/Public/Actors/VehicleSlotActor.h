@@ -7,9 +7,26 @@
 
 class UStaticMeshComponent;
 
+// Blueprint-facing wrapper for TaraSimCore's EVehicleType. We can't decorate
+// EVehicleType itself with UENUM(BlueprintType) because that macro lives in
+// CoreUObject — and TaraSimCore is locked to Core-only. Same pattern as
+// EShedActionSeason for ESeason. Values mirror EVehicleType 1:1; convert via
+// static_cast<EVehicleType>((uint8)slotType) at call sites.
+UENUM(BlueprintType)
+enum class EVehicleTypeBP : uint8
+{
+	Foot        = 0,
+	Horse       = 1,
+	TwoWheeler  = 2,
+	FourWheeler = 3,
+	Buggy       = 4,
+	Chopper     = 5,
+};
+
 // One parking-bay actor inside the Shed (TS-3D-PHASE2-shed-cottage plan §6).
-// Holds a target EVehicleType + a vehicle-body StaticMesh that's visible only
-// when the player owns that vehicle (Subsystem->IsVehicleOwned returns true).
+// Holds a target EVehicleTypeBP + a vehicle-body StaticMesh that's visible
+// only when the player owns that vehicle (Subsystem->IsVehicleOwned returns
+// true).
 //
 // Inherits AInteractableActor — when the player overlaps + presses Interact,
 // the slot fires `OnInteract` which (in Blueprint or a subclass) possesses
@@ -26,7 +43,7 @@ public:
 	// Which vehicle this slot represents. Set per-instance in the level.
 	// Default Foot keeps slot harmless if designer forgets to set.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tara|Vehicle")
-	EVehicleType SlotVehicleType = EVehicleType::Foot;
+	EVehicleTypeBP SlotVehicleType = EVehicleTypeBP::Foot;
 
 	// Optional override mesh — if null, falls back to a placeholder cube.
 	// Phase 3 visual pass swaps in proper vehicle meshes per type.

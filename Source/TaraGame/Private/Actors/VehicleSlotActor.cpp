@@ -27,7 +27,7 @@ bool AVehicleSlotActor::IsInteractAvailable_Implementation() const
 	{
 		if (UTaraSimSubsystem* Sub = GI->GetSubsystem<UTaraSimSubsystem>())
 		{
-			return Sub->IsVehicleOwned((int32)SlotVehicleType);
+			return Sub->IsVehicleOwned((int32)(uint8)SlotVehicleType);
 		}
 	}
 	return false;
@@ -38,7 +38,7 @@ bool AVehicleSlotActor::OnInteract_Implementation(APawn* /*InstigatorPawn*/)
 	// Default: log + return true. Blueprint override does the possession
 	// swap to the actual vehicle Pawn (BP_QuadBike, BP_Bike, etc.).
 	UE_LOG(LogTemp, Display, TEXT("[VehicleSlot] Player chose vehicle type %d (override OnInteract in BP to handle)"),
-		(int32)SlotVehicleType);
+		(int32)(uint8)SlotVehicleType);
 	return true;
 }
 
