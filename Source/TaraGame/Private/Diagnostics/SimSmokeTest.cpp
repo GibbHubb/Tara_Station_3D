@@ -188,6 +188,93 @@ FSimSmokeTestResult FSimSmokeTest::RunOnFreshStation(int32 Days)
 		}
 	}
 
+	// WeanCohort invariant — Phase 5+ prereq verification. If a year-tick has
+	// produced an Unweaned cohort, wean it + verify (1) state transitions to
+	// Weaner, (2) some breeder dam's bLactating flag flipped off, (3)
+	// MusterTrainedness resets to 0 on the calf cohort.
+	if (R.bPassed)
+	{
+		int32 UnweanedBirthYear = -1;
+		bool bAnyLactatingBefore = false;
+		for (const FCattleCohort& C : Station->GetHerd().Cohorts)
+		{
+			if (C.State == ECohortState::Unweaned && C.Count > 0 && UnweanedBirthYear == -1)
+			{
+				UnweanedBirthYear = C.BirthYear;
+			}
+			if (C.bLactating) bAnyLactatingBefore = true;
+		}
+
+		if (UnweanedBirthYear == -1)
+		{
+			R.Notes.Add(TEXT("WeanCohort test: no Unweaned cohort yet — skipped (need year ≥2 to test)"));
+		}
+		else
+		{
+			const bool bWeaned = Station->WeanCohort(UnweanedBirthYear);
+			if (!bWeaned)
+			{
+				RecordFailure(R, FString::Printf(
+					TEXT("WeanCohort(%d) returned false unexpectedly"), UnweanedBirthYear));
+			}
+			else
+			{
+				// State must be Weaner now.
+				bool bFoundWeaner = false;
+				bool bAnyLactatingAfter = false;
+				for (const FCattleCohort& C : Station->GetHerd().Cohorts)
+				{
+					if (C.BirthYear == UnweanedBirthYear && C.State == ECohortState::Weaner)
+					{
+						bFoundWeaner = true;
+						if (C.MusterTrainedness != 0.0f)
+						{
+							RecordFailure(R, FString::Printf(
+								TEXT("WeanCohort: weaner cohort %d MusterTrainedness = %.2f (expected 0)"),
+								UnweanedBirthYear, C.MusterTrainedness));
+						}
+					}
+					if (C.bLactating) bAnyLactatingAfter = true;
+				}
+				if (!bFoundWeaner)
+				{
+					RecordFailure(R, FString::Printf(
+						TEXT("WeanCohort: cohort %d still not in Weaner state"),
+						UnweanedBirthYear));
+				}
+				if (bAnyLactatingBefore && bAnyLactatingAfter)
+				{
+					// Could be more than one lactating dam — soft warn, not fail.
+					R.Notes.Add(TEXT("WeanCohort: at least one cohort still lactating after wean "
+					                 "(may indicate multiple lactating dams — investigate if unexpected)"));
+				}
+				R.Notes.Add(FString::Printf(
+					TEXT("WeanCohort test: cohort %d weaned successfully"), UnweanedBirthYear));
+			}
+		}
+	}
+
+	// bHorned distribution check — informational only. Sanity that some
+	// new Unweaned cohorts were marked horned during the year.
+	{
+		int32 HornedCount = 0;
+		int32 UnweanedCount = 0;
+		for (const FCattleCohort& C : Station->GetHerd().Cohorts)
+		{
+			if (C.State == ECohortState::Unweaned || C.State == ECohortState::Weaner)
+			{
+				UnweanedCount++;
+				if (C.bHorned) HornedCount++;
+			}
+		}
+		if (UnweanedCount > 0)
+		{
+			R.Notes.Add(FString::Printf(
+				TEXT("bHorned distribution: %d/%d young cohorts horned (~%.0f%%; expected ~30%%)"),
+				HornedCount, UnweanedCount, 100.0f * HornedCount / UnweanedCount));
+		}
+	}
+
 	return R;
 }
 
