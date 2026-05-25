@@ -303,7 +303,7 @@ void UShedActionMenu::HandleActionButtonClicked()
 		return;
 	}
 
-	UFunction* Func = Sub->FindFunctionByName(Row.BridgeFunctionName);
+	UFunction* Func = Sub->GetClass()->FindFunctionByName(Row.BridgeFunctionName);
 	if (!Func)
 	{
 		UE_LOG(LogTemp, Warning,
